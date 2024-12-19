@@ -3,6 +3,7 @@ import pandas as pd
 from datasets import concatenate_datasets
 import os
 import json
+import sys
 
 def get_data(lang):
     """
@@ -60,20 +61,16 @@ pretrain = get_data(lang)
 
 
 
-
-
-
 # WARNING, WE ARE NOW XITED THE SHANNON SECTION AND ENTERING THE DARIAN SECTION
 # PREPARE FOR MUCH LESS PRETTY CODE XD
 # ==== we are loading the semeval data to do bpe on everything together ====
 
 # base dir will need to be edited if this is run on a different computer
-base_dir = "/Users/darianlee/PycharmProjects/semEval_pretrain_Darian/semeval 5/train"
+base_dir = os.path.join(os.path.dirname(__file__), "data")
 
 def get_semeval_data(base_dir, for_bpe = False):
     # for_bpe allows user to specify what format the data should be in
     # for_bpe will return dfs with a single column 'text' so that it can be combined with the pretrain data to run bpe
-
 
     # dictionary to store loaded data for each language
     semeval_train = {}
@@ -82,11 +79,9 @@ def get_semeval_data(base_dir, for_bpe = False):
     for folder_name in os.listdir(base_dir):
         folder_path = os.path.join(base_dir, folder_name)
 
-
         # check if the path is a language folder
         if os.path.isdir(folder_path):
             jsonl_file_path = os.path.join(folder_path, "train.jsonl")
-
 
             if os.path.isfile(jsonl_file_path):
                 with open(jsonl_file_path, "r", encoding="utf-8") as jsonl_file:
@@ -108,7 +103,7 @@ def get_semeval_data(base_dir, for_bpe = False):
 
 # data_by_language now has data for each language
 semeval_train = get_semeval_data(base_dir, for_bpe=True)
-
+print(semeval_train)
 
 def get_text_file_for_sentencepiece():
     # creating a text corpus for BPE
