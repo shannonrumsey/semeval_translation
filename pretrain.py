@@ -4,7 +4,14 @@ from datasets import concatenate_datasets
 import os
 import json
 import sys
+import sentencepiece as spm
+import numpy as np
+from numpy.random import Generator, PCG64
 
+# rng = Generator(PCG64())
+# print(rng.poisson(3.5))
+
+# sys.exit(0)
 def get_data(lang):
     """
     Gets quesiton data from Hugging Face datasets.
@@ -31,8 +38,7 @@ def get_data(lang):
         if len(l) == 2:
             data = load_dataset(l[0], l[1])["train"]
             data = [example["question"] for example in data]
-            print(l[1])
-            print(len(data))
+            # print(len(data))
 
 
 
@@ -41,15 +47,13 @@ def get_data(lang):
             data = load_dataset(l)
             data = concatenate_datasets([data["train"], data["test"]])
             data = [example["question"] for example in data]
-            print(l)
-            print(len(data))
+            # print(len(data))
 
 
         else:
             data = load_dataset(l)["train"]
             data = [example["question"] for example in data]
-            print(l)
-            print(len(data))
+            # print(len(data))
 
 
         df = pd.concat([df, pd.DataFrame(data, columns=["text"])], ignore_index=True)
@@ -66,9 +70,9 @@ pretrain = get_data(lang)
 # ==== we are loading the semeval data to do bpe on everything together ====
 
 # base dir will need to be edited if this is run on a different computer
-base_dir = os.path.join(os.path.dirname(__file__), "data")
+base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_train")
 
-def get_semeval_data(base_dir, for_bpe = False):
+def get_semeval_data(base_dir, for_bpe=False):
     # for_bpe allows user to specify what format the data should be in
     # for_bpe will return dfs with a single column 'text' so that it can be combined with the pretrain data to run bpe
 
@@ -93,6 +97,7 @@ def get_semeval_data(base_dir, for_bpe = False):
                         combined_data = data_target + data_source
 
                         df = pd.DataFrame({"text": combined_data})
+
                     else:
                         data = [json.loads(line) for line in jsonl_file]
                         df = pd.DataFrame(data)
@@ -103,7 +108,6 @@ def get_semeval_data(base_dir, for_bpe = False):
 
 # data_by_language now has data for each language
 semeval_train = get_semeval_data(base_dir, for_bpe=True)
-print(semeval_train)
 
 def get_text_file_for_sentencepiece():
     # creating a text corpus for BPE
@@ -126,17 +130,52 @@ def get_text_file_for_sentencepiece():
 
 corpus = get_text_file_for_sentencepiece()
 
-# bpe
-import sentencepiece as spm
-spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, character_coverage=0.9995, model_type="bpe")
+# BPE
+def apply_bpe_tokenizer(df, column_name):
+    try:
+        spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, character_coverage=0.9995, model_type="bpe")
+        sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
+        df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
 
-def apply_bpe_tokenizer(df, column_name, model_prefix="tokenizer_combined"):
-    sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
-    df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
+    except RuntimeError as e:
+        if "Vocabulary size too high" in str(e):
+            max_vocab_size = int(str(e).split("value <= ")[1].strip("."))
+            print(f"Changing max vocab size to {max_vocab_size}")
+            spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=max_vocab_size, character_coverage=0.9995, model_type="bpe")
+            sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
+            df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
+
     return df
 
 pretrain = apply_bpe_tokenizer(pretrain, "text")
 
-print(pretrain)
+def noise(row):
+    """
+    Randomly masks words in a sentence.
+    Args:
+        row (BPE list): A list of a sentence that has been encoded using BPE.
+    Returns:
+        noisy_row (BPE list): A list that has noise introduced via random masking.
+    Notes:
+        - The span length sampled from the Poisson distribution must be shorter than the sentence length.
+        - 
+    """
+    # Randomly select span length (number of words to be masked)
+  
+    span_len = rng.poisson(3.5)
 
+    if span_len > len(row):
+        span_len = 0
 
+    print(row, span_len)
+    # Randomly select index to be masked, repeat this span_len times
+    indices = rng.choice(row, size=span_len, replace=False)
+    
+    noisy_row = ["[MASK]" if ind in indices else word for ind, word in enumerate(row)]
+    print(span_len, noisy_row)
+
+    return noisy_row
+
+    
+rng = Generator(PCG64())
+pretrain.apply(lambda row: noise(row), axis=1)
