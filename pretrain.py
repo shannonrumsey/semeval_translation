@@ -8,10 +8,6 @@ import sentencepiece as spm
 import numpy as np
 from numpy.random import Generator, PCG64
 
-# rng = Generator(PCG64())
-# print(rng.poisson(3.5))
-
-# sys.exit(0)
 def get_data(lang):
     """
     Gets quesiton data from Hugging Face datasets.
@@ -121,7 +117,7 @@ def get_text_file_for_sentencepiece():
     big_df = pd.concat([big_df, pretrain], ignore_index=True)
 
 
-    corpus = " ".join(big_df["text"].dropna())
+    corpus = "\n".join(big_df["text"].dropna())
     with open("corpus_for_bpe.txt", "w", encoding="utf-8") as f:
         f.write(corpus)
 
@@ -131,20 +127,11 @@ def get_text_file_for_sentencepiece():
 corpus = get_text_file_for_sentencepiece()
 
 # BPE
+spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, character_coverage=0.9995, model_type="bpe")
+
 def apply_bpe_tokenizer(df, column_name):
-    try:
-        spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, character_coverage=0.9995, model_type="bpe")
-        sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
-        df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
-
-    except RuntimeError as e:
-        if "Vocabulary size too high" in str(e):
-            max_vocab_size = int(str(e).split("value <= ")[1].strip("."))
-            print(f"Changing max vocab size to {max_vocab_size}")
-            spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=max_vocab_size, character_coverage=0.9995, model_type="bpe")
-            sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
-            df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
-
+    sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
+    df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
     return df
 
 pretrain = apply_bpe_tokenizer(pretrain, "text")
@@ -157,25 +144,27 @@ def noise(row):
     Returns:
         noisy_row (BPE list): A list that has noise introduced via random masking.
     Notes:
-        - The span length sampled from the Poisson distribution must be shorter than the sentence length.
-        - 
+        - The span length sampled from the Poisson distribution cannot be greater than the length of the sentence
+        - If the span length is greater, just change it to be the same as the text length
     """
-    # Randomly select span length (number of words to be masked)
-  
-    span_len = rng.poisson(3.5)
+    span_len = row["span_len"]
+    text = row["text"]
 
-    if span_len > len(row):
-        span_len = 0
+    if span_len > len(text):
+        span_len = len(text)
 
-    print(row, span_len)
     # Randomly select index to be masked, repeat this span_len times
-    indices = rng.choice(row, size=span_len, replace=False)
+    to_corrupt = rng.choice(text, size=span_len, replace=False)
     
-    noisy_row = ["[MASK]" if ind in indices else word for ind, word in enumerate(row)]
-    print(span_len, noisy_row)
+    noisy_row = ["[MASK]" if word in to_corrupt else word for word in text]
 
-    return noisy_row
+    # move text over an indices to be decoder input
+    return noisy_row, text[1:]
 
     
 rng = Generator(PCG64())
-pretrain.apply(lambda row: noise(row), axis=1)
+# Randomly select span length (number of words to be masked)
+span_len = rng.poisson(3.5, size=len(pretrain["text"]))
+df = pd.concat([pd.DataFrame(span_len, columns=["span_len"]), pretrain], axis=1)
+df[["encoder_input", "decoder_input"]] = df.apply(lambda row: noise(row), axis=1)
+
