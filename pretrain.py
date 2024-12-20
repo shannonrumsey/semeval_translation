@@ -18,11 +18,12 @@ def get_data(lang):
                         - Single-component strings: "squad_it", "rajpurkar/squad"
                         - Two-component lists: ["google/xquad", "xquad.ar"], where the second element is the config
     Returns:
-        pd.DataFrame: A DataFrame containing all the questions from the specified datasets
-
+        pd.DataFrame: A DataFrame containing all the questions from the specified datasets. The questions are combined so
+        that each row has a fixed length, begins with its language code, and each sentence, regardless of how it was divided or
+        placement in the row, ends with </s> 
 
     Notes:
-        - AR, DE, ES have two components (["google/xquad", "xquad.lang"]) and only has a val split
+        - AR, DE, ES have two components (["facebook/mlqa", ""mlqa-translate-train.lang_code"])
         - IT is small so the train and test split are combined
     """
     df = pd.DataFrame()
@@ -33,7 +34,12 @@ def get_data(lang):
         # AR, DE, and ES have two components and only val data
         if len(l) == 2:
             data = load_dataset(l[0], l[1])["train"]
-            data = [example["question"] for example in data]
+            # data = [example["question"] for example in data]
+            lang_code = l[1].split(".")[-1]
+            data_str = " ".join(example["question"] + " </s>" for example in data)
+            data_lst = data_str.split()
+            sent_size = 15
+            data = ["<" + str(lang_code) + "> " +  " ".join(data_lst[i:i + sent_size]) for i in range(0, len(data_lst), sent_size)]
             # print(len(data))
 
 
@@ -42,15 +48,28 @@ def get_data(lang):
         elif l == "squad_it":
             data = load_dataset(l)
             data = concatenate_datasets([data["train"], data["test"]])
-            data = [example["question"] for example in data]
+            # data = [example["question"] for example in data]
+            data_str = " ".join(example["question"] + " </s>" for example in data)
+            data_lst = data_str.split()
+            sent_size = 15
+            data = ["<it> " +  " ".join(data_lst[i:i + sent_size]) for i in range(0, len(data_lst), sent_size)]
             # print(len(data))
 
 
         else:
             data = load_dataset(l)["train"]
-            data = [example["question"] for example in data]
+            # data = [example["question"] for example in data]
+            if "fr" in l:
+                lang_code = "<fr>"
+            elif "JaQuAD" in l:
+                lang_code = "<ja>"
+            else:
+                lang_code = "<en>"
+            data_str = " ".join(example["question"] + " </s>" for example in data)
+            data_lst = data_str.split()
+            sent_size = 15
+            data = [lang_code + " ".join(data_lst[i:i + sent_size]) for i in range(0, len(data_lst), sent_size)]
             # print(len(data))
-
 
         df = pd.concat([df, pd.DataFrame(data, columns=["text"])], ignore_index=True)
 
@@ -58,8 +77,6 @@ def get_data(lang):
 
 lang = ["qwant/squad_fr", "squad_it", "rajpurkar/squad", "SkelterLabsInc/JaQuAD", ["facebook/mlqa", "mlqa-translate-train.ar"], ["facebook/mlqa", "mlqa-translate-train.de"], ["facebook/mlqa", "mlqa-translate-train.es"]]
 pretrain = get_data(lang)
-
-
 
 # WARNING, WE ARE NOW XITED THE SHANNON SECTION AND ENTERING THE DARIAN SECTION
 # PREPARE FOR MUCH LESS PRETTY CODE XD
@@ -127,7 +144,10 @@ def get_text_file_for_sentencepiece():
 corpus = get_text_file_for_sentencepiece()
 
 # BPE
-spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, character_coverage=0.9995, model_type="bpe")
+# Removing dummy prefix correctly formats language codes
+spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, add_dummy_prefix=False, 
+                               character_coverage=0.9995, model_type="bpe",
+                               user_defined_symbols=["</s>", "<es>", "<fr>", "<it>", "<de>", "<ar>", "<ja>", "<en>"])
 
 def apply_bpe_tokenizer(df, column_name):
     sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
@@ -136,35 +156,44 @@ def apply_bpe_tokenizer(df, column_name):
 
 pretrain = apply_bpe_tokenizer(pretrain, "text")
 
-def noise(row):
+def noise(row, rng):
     """
     Randomly masks words in a sentence.
     Args:
         row (BPE list): A list of a sentence that has been encoded using BPE.
     Returns:
-        noisy_row (BPE list): A list that has noise introduced via random masking.
+        noisy_row (BPE list): A list that has noise introduced via random masking (encoder input).
+        text (BPE list): A list containing the original sequence before masking (decoder input).
+        shifted (BPE list): A list of the original text, shifted over one token to the right (expected model generation).
+
     Notes:
         - The span length sampled from the Poisson distribution cannot be greater than the length of the sentence
         - If the span length is greater, just change it to be the same as the text length
+        - The language tag should never be masked
+        - [MASK] token is not in the BPE vocab because the model should predict a replacement for it!
     """
     span_len = row["span_len"]
     text = row["text"]
 
-    if span_len > len(text):
-        span_len = len(text)
+    if span_len > len(text) - 1:
+        span_len = len(text) - 1
 
     # Randomly select index to be masked, repeat this span_len times
-    to_corrupt = rng.choice(text, size=span_len, replace=False)
+    to_corrupt = rng.choice(text[1:], size=span_len, replace=False)
     
     noisy_row = ["[MASK]" if word in to_corrupt else word for word in text]
 
+    # Add lang code at the end to make shifted the same length as text
+    shifted = text[1:] + list(text[0])
+    
     # move text over an indices to be decoder input
-    return noisy_row, text[1:]
+    return noisy_row, text, shifted
 
     
 rng = Generator(PCG64())
 # Randomly select span length (number of words to be masked)
 span_len = rng.poisson(3.5, size=len(pretrain["text"]))
 df = pd.concat([pd.DataFrame(span_len, columns=["span_len"]), pretrain], axis=1)
-df[["encoder_input", "decoder_input"]] = df.apply(lambda row: noise(row), axis=1)
-
+df[["encoder_input", "decoder_input", "decoder_output"]] = df.apply(lambda row: pd.Series(noise(row, rng)), axis=1)
+df.drop(["span_len", "text"], axis=1, inplace=True)
+print(df.columns, df)
