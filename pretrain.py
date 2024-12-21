@@ -1,3 +1,4 @@
+import pandas
 from datasets import load_dataset
 import pandas as pd
 from datasets import concatenate_datasets
@@ -7,6 +8,9 @@ import sys
 import sentencepiece as spm
 import numpy as np
 from numpy.random import Generator, PCG64
+
+# summary of changes 12/21:
+# pretrain now returns a dictionary of dfs for each language. This is needed to allow us to split after bpe in order to preserve sentence lengths
 
 def get_data(lang):
     """
@@ -18,28 +22,25 @@ def get_data(lang):
                         - Single-component strings: "squad_it", "rajpurkar/squad"
                         - Two-component lists: ["google/xquad", "xquad.ar"], where the second element is the config
     Returns:
-        pd.DataFrame: A DataFrame containing all the questions from the specified datasets. The questions are combined so
-        that each row has a fixed length, begins with its language code, and each sentence, regardless of how it was divided or
-        placement in the row, ends with </s> 
+        A dictionary of sentence dfs for each language ending in </s>
 
     Notes:
         - AR, DE, ES have two components (["facebook/mlqa", ""mlqa-translate-train.lang_code"])
         - IT is small so the train and test split are combined
     """
-    df = pd.DataFrame()
+    dfs = {}
 
     for l in lang:
-        corpus = ""
+
 
         # AR, DE, and ES have two components and only val data
         if len(l) == 2:
+            df = pd.DataFrame()
             data = load_dataset(l[0], l[1])["train"]
             # data = [example["question"] for example in data]
             lang_code = l[1].split(".")[-1]
-            data_str = " ".join(example["question"] + " </s>" for example in data)
-            data_lst = data_str.split()
-            sent_size = 15
-            data = ["<" + str(lang_code) + "> " +  " ".join(data_lst[i:i + sent_size]) for i in range(0, len(data_lst), sent_size)]
+            data = [example["question"] + " </s>" for example in data]
+            dfs[lang_code] = pd.DataFrame({"text": data})
             # print(len(data))
 
 
@@ -49,10 +50,8 @@ def get_data(lang):
             data = load_dataset(l)
             data = concatenate_datasets([data["train"], data["test"]])
             # data = [example["question"] for example in data]
-            data_str = " ".join(example["question"] + " </s>" for example in data)
-            data_lst = data_str.split()
-            sent_size = 15
-            data = ["<it> " +  " ".join(data_lst[i:i + sent_size]) for i in range(0, len(data_lst), sent_size)]
+            data = [example["question"] + " </s>" for example in data]
+            dfs[lang_code] = pd.DataFrame({"text": data})
             # print(len(data))
 
 
@@ -65,18 +64,23 @@ def get_data(lang):
                 lang_code = "<ja>"
             else:
                 lang_code = "<en>"
-            data_str = " ".join(example["question"] + " </s>" for example in data)
-            data_lst = data_str.split()
-            sent_size = 15
-            data = [lang_code + " ".join(data_lst[i:i + sent_size]) for i in range(0, len(data_lst), sent_size)]
+
+            data = [example["question"] + " </s>" for example in data]
+            dfs[lang_code] = pd.DataFrame({"text": data})
             # print(len(data))
 
-        df = pd.concat([df, pd.DataFrame(data, columns=["text"])], ignore_index=True)
+        #df = pd.concat([df, pd.DataFrame(data, columns=["text"])], ignore_index=True)
 
-    return df
+    return dfs
 
 lang = ["qwant/squad_fr", "squad_it", "rajpurkar/squad", "SkelterLabsInc/JaQuAD", ["facebook/mlqa", "mlqa-translate-train.ar"], ["facebook/mlqa", "mlqa-translate-train.de"], ["facebook/mlqa", "mlqa-translate-train.es"]]
 pretrain = get_data(lang)
+# ^ pretrain now is a dict that contains seperate data frames for each language
+
+# just printing out the head of each df to make sure our results look normal
+for key, value in pretrain.items():
+    print(key)
+    print(value.head())
 
 # WARNING, WE ARE NOW XITED THE SHANNON SECTION AND ENTERING THE DARIAN SECTION
 # PREPARE FOR MUCH LESS PRETTY CODE XD
@@ -131,7 +135,9 @@ def get_text_file_for_sentencepiece():
         df = semeval_train[key]
 
         big_df = pd.concat([big_df, df], ignore_index=True)
-    big_df = pd.concat([big_df, pretrain], ignore_index=True)
+    for key, value in pretrain.items():
+
+        big_df = pd.concat([big_df, value], ignore_index=True)
 
 
     corpus = "\n".join(big_df["text"].dropna())
@@ -143,9 +149,10 @@ def get_text_file_for_sentencepiece():
 
 corpus = get_text_file_for_sentencepiece()
 
+
 # BPE
 # Removing dummy prefix correctly formats language codes
-spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, add_dummy_prefix=False, 
+spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, add_dummy_prefix=False,
                                character_coverage=0.9995, model_type="bpe",
                                user_defined_symbols=["</s>", "<es>", "<fr>", "<it>", "<de>", "<ar>", "<ja>", "<en>"])
 
@@ -154,7 +161,79 @@ def apply_bpe_tokenizer(df, column_name):
     df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
     return df
 
-pretrain = apply_bpe_tokenizer(pretrain, "text")
+
+def get_chunks_from_corpuses(dataframes, chunk_size=35):
+
+    """Inputs:
+            chunk size: the size of chunks of continuos text, defaulted at 35, which was used in pretraining the previous model and led to good results
+            dataframes: a dictionary of dataframes for each language
+
+        outputs:
+            sampled_dfs: a dfs of text for each language where each row has the same sequence length"""
+    new_dfs = {}
+    lens = {}
+    for key, df in dataframes.items():
+        sub_word_df = apply_bpe_tokenizer(df, "text")
+        sub_word_df["text"] = sub_word_df["text"].apply(lambda row: " ".join(row))
+        print(sub_word_df.head())
+        corpus = " ".join(sub_word_df["text"].dropna()) # join all the text in the df into one corpus so that chunking can occur
+
+
+        chunks = []
+
+        # a loop for processing the corpus into chunks and appending them to the df
+        not_processed = corpus.split(" ") # a list of all the words in the corpus in order
+        while len(not_processed) > chunk_size:
+            current_chunk = not_processed[:chunk_size]
+            if key[0] == "<":
+                chunks.append([key] + current_chunk) # for some reason, some of the keys are in the form "en" and others are in the form "<en>"
+            else:
+                chunks.append(["<" + key + ">"] + current_chunk)
+
+            # note: to reduce noise, we allow some repetiton by making sure the chunks always start at the beginning of a sentence
+            # example: if text is:
+            # "Toads have different distinctive features than what typically characterizes a frog. Often toads have drier, bumpier “warty” skin and prefer drier habitats. They usually have shorter hind limbs and rounder stouter bodies than most typical frogs. Toads have poison glands in their skin to keep predators from eating them and oftentimes produce a funny smell when handled."
+            # and chunk size is 15, then output will be:
+            # 1. Toads have different distinctive features than what typically characterizes a frog. Often toads have drier
+            # 2. Often toads have drier, bumpier “warty” skin and prefer drier habitats. They usually have shorter
+            # 3. They usually have shorter hind limbs and rounder stouter bodies than most typical frogs. Toads
+
+            # this allows for some repetition, but is less noisey for the model
+            # this is a variant to the sliding window approach used in training most state of the art models
+
+
+            if "</s>" in current_chunk:
+                reversed_index = list(reversed(current_chunk)).index("</s>")  # reverse() followed by index() finds the last index of "</s>"
+                index = len(current_chunk) - reversed_index - 1 # unreversing it
+                not_processed = not_processed[index + 1:]
+            else:
+                print("No </s> found, using chunk size.")
+                # if no "</s>" is found, just return the next chunk
+                not_processed = not_processed[chunk_size:]
+
+
+
+
+        chunked_df = pd.DataFrame({"text": chunks})
+        new_dfs[key] = chunked_df
+
+        lens[key] = len(chunks) # keep track of the lowest occuring class inorder to avoid class inbalances
+    print(lens)
+    min_len = min(lens.values())
+
+    sampled_dfs = {key: df.sample(n=min_len, random_state=12).reset_index(drop=True) for key, df in new_dfs.items()}
+
+    return sampled_dfs
+
+
+
+
+pretrain = get_chunks_from_corpuses(pretrain, 35)
+print("after_chunking!!!")
+for key, df in pretrain.items():
+    print(key)
+    print(df.head())
+    print("size: ", len(df))
 
 def noise(row, rng):
     """
@@ -192,8 +271,23 @@ def noise(row, rng):
     
 rng = Generator(PCG64())
 # Randomly select span length (number of words to be masked)
-span_len = rng.poisson(3.5, size=len(pretrain["text"]))
-df = pd.concat([pd.DataFrame(span_len, columns=["span_len"]), pretrain], axis=1)
-df[["encoder_input", "decoder_input", "decoder_output"]] = df.apply(lambda row: pd.Series(noise(row, rng)), axis=1)
-df.drop(["span_len", "text"], axis=1, inplace=True)
-print(df.columns, df)
+masked_dfs = {}
+for lang_key, pretrain_df in pretrain.items():
+    span_len = rng.poisson(3.5, size=len(pretrain_df["text"]))
+    df = pd.concat([pd.DataFrame(span_len, columns=["span_len"]), pretrain_df], axis=1)
+    df[["encoder_input", "decoder_input", "decoder_output"]] = df.apply(lambda row: pd.Series(noise(row, rng)), axis=1)
+    df.drop(["span_len", "text"], axis=1, inplace=True)
+    masked_dfs[lang_key] = df
+
+
+for lang_key, masked_df in masked_dfs.items():
+    file_path = f"{lang_key}_masked_data.csv"
+
+    masked_df.to_csv(file_path, index=False)
+
+
+
+
+
+
+
