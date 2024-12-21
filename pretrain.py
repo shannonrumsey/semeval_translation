@@ -59,11 +59,11 @@ def get_data(lang):
             data = load_dataset(l)["train"]
             # data = [example["question"] for example in data]
             if "fr" in l:
-                lang_code = "<fr>"
+                lang_code = "fr"
             elif "JaQuAD" in l:
-                lang_code = "<ja>"
+                lang_code = "ja"
             else:
-                lang_code = "<en>"
+                lang_code = "en"
 
             data = [example["question"] + " </s>" for example in data]
             dfs[lang_code] = pd.DataFrame({"text": data})
@@ -272,21 +272,30 @@ def noise(row, rng):
 rng = Generator(PCG64())
 # Randomly select span length (number of words to be masked)
 masked_dfs = {}
+output_folder = "processed_pretrain_dfs"
+os.makedirs(output_folder, exist_ok=True)
+
+# saving all individual dfs and a merged df in a folder called processed_pretrain_dfs
+
+all_dfs = []
 for lang_key, pretrain_df in pretrain.items():
     span_len = rng.poisson(3.5, size=len(pretrain_df["text"]))
     df = pd.concat([pd.DataFrame(span_len, columns=["span_len"]), pretrain_df], axis=1)
     df[["encoder_input", "decoder_input", "decoder_output"]] = df.apply(lambda row: pd.Series(noise(row, rng)), axis=1)
     df.drop(["span_len", "text"], axis=1, inplace=True)
     masked_dfs[lang_key] = df
-
+    all_dfs.append(df)
 
 for lang_key, masked_df in masked_dfs.items():
-    file_path = f"{lang_key}_masked_data.csv"
-
+    file_path = os.path.join(output_folder, f"{lang_key}_masked_data.csv")
     masked_df.to_csv(file_path, index=False)
 
 
+merged_df = pd.concat(all_dfs, ignore_index=True)
 
+
+merged_file_path = os.path.join(output_folder, "all_masked_data.csv")
+merged_df.to_csv(merged_file_path, index=False)
 
 
 
