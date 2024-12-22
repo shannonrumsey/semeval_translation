@@ -263,7 +263,9 @@ def noise(row, rng):
     noisy_row = ["[MASK]" if word in to_corrupt else word for word in text]
 
     # Add lang code at the end to make shifted the same length as text
-    shifted = text[1:] + list(text[0])
+    print("printing text[0]")
+    print([text[0]])
+    shifted = text[1:] + [text[0]]
     
     # move text over an indices to be decoder input
     return noisy_row, text, shifted
@@ -285,6 +287,10 @@ for lang_key, pretrain_df in pretrain.items():
     df.drop(["span_len", "text"], axis=1, inplace=True)
     masked_dfs[lang_key] = df
     all_dfs.append(df)
+
+for df in all_dfs:
+    print(df.head())
+
 
 for lang_key, masked_df in masked_dfs.items():
     file_path = os.path.join(output_folder, f"{lang_key}_masked_data.csv")
