@@ -297,11 +297,7 @@ for lang_key, masked_df in masked_dfs.items():
     masked_df.to_csv(file_path, index=False)
 
 
-merged_df = pd.concat(all_dfs, ignore_index=True)
 
-
-merged_file_path = os.path.join(output_folder, "all_masked_data.csv")
-merged_df.to_csv(merged_file_path, index=False)
 
 
 
