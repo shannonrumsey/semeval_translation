@@ -22,7 +22,7 @@ def get_data(lang):
                         - Single-component strings: "squad_it", "rajpurkar/squad"
                         - Two-component lists: ["google/xquad", "xquad.ar"], where the second element is the config
     Returns:
-        A dictionary of sentence dfs for each language ending in </s>
+        A dictionary of DataFrames for each language
 
     Notes:
         - AR, DE, ES have two components (["facebook/mlqa", ""mlqa-translate-train.lang_code"])
@@ -37,23 +37,14 @@ def get_data(lang):
         if len(l) == 2:
             df = pd.DataFrame()
             data = load_dataset(l[0], l[1])["train"]
-            # data = [example["question"] for example in data]
             lang_code = l[1].split(".")[-1]
-            data = [example["question"] + " </s>" for example in data]
-            dfs[lang_code] = pd.DataFrame({"text": data})
             # print(len(data))
-
-
 
         # IT has combined train and test
         elif l == "squad_it":
             data = load_dataset(l)
             data = concatenate_datasets([data["train"], data["test"]])
-            # data = [example["question"] for example in data]
-            data = [example["question"] + " </s>" for example in data]
-            dfs[lang_code] = pd.DataFrame({"text": data})
             # print(len(data))
-
 
         else:
             data = load_dataset(l)["train"]
@@ -65,17 +56,14 @@ def get_data(lang):
             else:
                 lang_code = "en"
 
-            data = [example["question"] + " </s>" for example in data]
-            dfs[lang_code] = pd.DataFrame({"text": data})
-            # print(len(data))
-
-        #df = pd.concat([df, pd.DataFrame(data, columns=["text"])], ignore_index=True)
+        data = [example["question"] + " </s>" for example in data]
+        dfs[lang_code] = pd.DataFrame({"text": data})
+        # print(len(data))
 
     return dfs
 
 lang = ["qwant/squad_fr", "squad_it", "rajpurkar/squad", "SkelterLabsInc/JaQuAD", ["facebook/mlqa", "mlqa-translate-train.ar"], ["facebook/mlqa", "mlqa-translate-train.de"], ["facebook/mlqa", "mlqa-translate-train.es"]]
 pretrain = get_data(lang)
-# ^ pretrain now is a dict that contains seperate data frames for each language
 
 # just printing out the head of each df to make sure our results look normal
 for key, value in pretrain.items():
@@ -85,8 +73,6 @@ for key, value in pretrain.items():
 # WARNING, WE ARE NOW XITED THE SHANNON SECTION AND ENTERING THE DARIAN SECTION
 # PREPARE FOR MUCH LESS PRETTY CODE XD
 # ==== we are loading the semeval data to do bpe on everything together ====
-
-# base dir will need to be edited if this is run on a different computer
 base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_train")
 
 def get_semeval_data(base_dir, for_bpe=False):
@@ -139,7 +125,6 @@ def get_text_file_for_sentencepiece():
 
         big_df = pd.concat([big_df, value], ignore_index=True)
 
-
     corpus = "\n".join(big_df["text"].dropna())
     with open("corpus_for_bpe.txt", "w", encoding="utf-8") as f:
         f.write(corpus)
@@ -163,13 +148,25 @@ def apply_bpe_tokenizer(df, column_name):
 
 
 def get_chunks_from_corpuses(dataframes, chunk_size=35):
-
-    """Inputs:
+    """
+    Inputs:
             chunk size: the size of chunks of continuos text, defaulted at 35, which was used in pretraining the previous model and led to good results
             dataframes: a dictionary of dataframes for each language
 
-        outputs:
-            sampled_dfs: a dfs of text for each language where each row has the same sequence length"""
+    Outputs:
+            sampled_dfs: a dfs of text for each language where each row has the same sequence length
+            
+    Notes: to reduce noise, we allow some repetiton by making sure the chunks always start at the beginning of a sentence
+            example: if text is:
+            "Toads have different distinctive features than what typically characterizes a frog. Often toads have drier, bumpier “warty” skin and prefer drier habitats. They usually have shorter hind limbs and rounder stouter bodies than most typical frogs. Toads have poison glands in their skin to keep predators from eating them and oftentimes produce a funny smell when handled."
+            and chunk size is 15, then output will be:
+            1. Toads have different distinctive features than what typically characterizes a frog. Often toads have drier
+            2. Often toads have drier, bumpier “warty” skin and prefer drier habitats. They usually have shorter
+            3. They usually have shorter hind limbs and rounder stouter bodies than most typical frogs. Toads
+
+            this allows for some repetition, but is less noisey for the model
+            this is a variant to the sliding window approach used in training most state of the art models
+    """
     new_dfs = {}
     lens = {}
     for key, df in dataframes.items():
@@ -177,7 +174,6 @@ def get_chunks_from_corpuses(dataframes, chunk_size=35):
         sub_word_df["text"] = sub_word_df["text"].apply(lambda row: " ".join(row))
         print(sub_word_df.head())
         corpus = " ".join(sub_word_df["text"].dropna()) # join all the text in the df into one corpus so that chunking can occur
-
 
         chunks = []
 
@@ -190,29 +186,14 @@ def get_chunks_from_corpuses(dataframes, chunk_size=35):
             else:
                 chunks.append(["<" + key + ">"] + current_chunk)
 
-            # note: to reduce noise, we allow some repetiton by making sure the chunks always start at the beginning of a sentence
-            # example: if text is:
-            # "Toads have different distinctive features than what typically characterizes a frog. Often toads have drier, bumpier “warty” skin and prefer drier habitats. They usually have shorter hind limbs and rounder stouter bodies than most typical frogs. Toads have poison glands in their skin to keep predators from eating them and oftentimes produce a funny smell when handled."
-            # and chunk size is 15, then output will be:
-            # 1. Toads have different distinctive features than what typically characterizes a frog. Often toads have drier
-            # 2. Often toads have drier, bumpier “warty” skin and prefer drier habitats. They usually have shorter
-            # 3. They usually have shorter hind limbs and rounder stouter bodies than most typical frogs. Toads
-
-            # this allows for some repetition, but is less noisey for the model
-            # this is a variant to the sliding window approach used in training most state of the art models
-
-
             if "</s>" in current_chunk:
                 reversed_index = list(reversed(current_chunk)).index("</s>")  # reverse() followed by index() finds the last index of "</s>"
                 index = len(current_chunk) - reversed_index - 1 # unreversing it
                 not_processed = not_processed[index + 1:]
             else:
-                print("No </s> found, using chunk size.")
+                # print("No </s> found, using chunk size.")
                 # if no "</s>" is found, just return the next chunk
                 not_processed = not_processed[chunk_size:]
-
-
-
 
         chunked_df = pd.DataFrame({"text": chunks})
         new_dfs[key] = chunked_df
@@ -224,9 +205,6 @@ def get_chunks_from_corpuses(dataframes, chunk_size=35):
     sampled_dfs = {key: df.sample(n=min_len, random_state=12).reset_index(drop=True) for key, df in new_dfs.items()}
 
     return sampled_dfs
-
-
-
 
 pretrain = get_chunks_from_corpuses(pretrain, 35)
 print("after_chunking!!!")
@@ -270,12 +248,11 @@ def noise(row, rng):
     # move text over an indices to be decoder input
     return noisy_row, text, shifted
 
-    
 rng = Generator(PCG64())
 # Randomly select span length (number of words to be masked)
 masked_dfs = {}
-output_folder = "processed_pretrain_dfs"
-os.makedirs(output_folder, exist_ok=True)
+# output_folder = "processed_pretrain_dfs"
+# os.makedirs(output_folder, exist_ok=True)
 
 # saving all individual dfs and a merged df in a folder called processed_pretrain_dfs
 
@@ -291,14 +268,9 @@ for lang_key, pretrain_df in pretrain.items():
 for df in all_dfs:
     print(df.head())
 
-
 for lang_key, masked_df in masked_dfs.items():
-    file_path = os.path.join(output_folder, f"{lang_key}_masked_data.csv")
+    file_path = os.path.join(os.path.dirname(__file__), f"data/processed_pretrain/{lang_key}_masked_data.csv")
     masked_df.to_csv(file_path, index=False)
-
-
-
-
 
 
 
