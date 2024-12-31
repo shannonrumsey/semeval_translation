@@ -28,41 +28,36 @@ def get_data(lang):
         - AR, DE, ES have two components (["facebook/mlqa", ""mlqa-translate-train.lang_code"])
         - IT is small so the train and test split are combined
     """
+    lang_codes = {"KorQuAD/squad_kor_v2": "ko", "Thaweewat/instruct-qa-thai-combined": "th", "FurkyT/IMDB-Turkish-QA": "tr",
+                  "real-jiakai/chinese-squadv2": "zh", "qwant/squad_fr": "fr", "rajpurkar/squad": "en", "SkelterLabsInc/JaQuAD": "ja"}
     dfs = {}
 
     for l in lang:
 
-
-        # AR, DE, and ES have two components and only val data
+        # AR, DE, and ES have two components
         if len(l) == 2:
-            df = pd.DataFrame()
-            data = load_dataset(l[0], l[1])["train"]
             lang_code = l[1].split(".")[-1]
-            # print(len(data))
+            data = load_dataset(l[0], l[1])["train"]
 
         # IT has combined train and test
         elif l == "squad_it":
+            lang_code = "it"
             data = load_dataset(l)
             data = concatenate_datasets([data["train"], data["test"]])
-            # print(len(data))
 
         else:
-            data = load_dataset(l)["train"]
-            # data = [example["question"] for example in data]
-            if "fr" in l:
-                lang_code = "fr"
-            elif "JaQuAD" in l:
-                lang_code = "ja"
-            else:
-                lang_code = "en"
+            lang_code = lang_codes[l]
+            data = load_dataset(l, trust_remote_code=True)["train"]
 
-        data = [example["question"] + " </s>" for example in data]
+        # Thai uses "instruction" instead of "question"
+        data = [example["question"] + " </s>" if "question" in example else example["instruction"] for example in data]
         dfs[lang_code] = pd.DataFrame({"text": data})
-        # print(len(data))
 
     return dfs
 
-lang = ["qwant/squad_fr", "squad_it", "rajpurkar/squad", "SkelterLabsInc/JaQuAD", ["facebook/mlqa", "mlqa-translate-train.ar"], ["facebook/mlqa", "mlqa-translate-train.de"], ["facebook/mlqa", "mlqa-translate-train.es"]]
+lang = ["real-jiakai/chinese-squadv2", "FurkyT/IMDB-Turkish-QA", "Thaweewat/instruct-qa-thai-combined", "KorQuAD/squad_kor_v2",
+        "qwant/squad_fr", "squad_it", "rajpurkar/squad", "SkelterLabsInc/JaQuAD", ["facebook/mlqa", "mlqa-translate-train.ar"],
+        ["facebook/mlqa", "mlqa-translate-train.de"], ["facebook/mlqa", "mlqa-translate-train.es"]]
 pretrain = get_data(lang)
 
 # just printing out the head of each df to make sure our results look normal
