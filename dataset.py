@@ -1,20 +1,11 @@
 import json
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
-from sklearn.metrics import f1_score
-import pandas
-from datasets import load_dataset
 import pandas as pd
-from datasets import concatenate_datasets
 import os
 import json
-import sys
 import sentencepiece as spm
-import numpy as np
-from numpy.random import Generator, PCG64
 import random
 import ast
 
@@ -264,19 +255,19 @@ class TranslationDataset(Dataset):
     def __getitem__(self, idx):
         return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], self.corpus_y_mask[idx]
 
-pretrain_list = []
+def get_pretrain():
+    pretrain_list = []
+    folder_path = os.path.abspath("data/processed_pretrain")
 
-folder_path = "data/processed_pretrain"
-
-for filename in os.listdir(folder_path):
-    if filename.endswith(".csv"):
-        file_path = os.path.join(folder_path, filename)
-        df = pd.read_csv(file_path)
-        pretrain_list.append(df)  
+    for filename in os.listdir(folder_path):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(folder_path, filename)
+            df = pd.read_csv(file_path)
+            pretrain_list.append(df)  
         
-semeval_train = []
 
 def get_semeval_train():
+    semeval_train = []
     base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_train")
 
     # code adapted from pretrain.py with minor modifications
@@ -322,6 +313,8 @@ def collate_fn(batch):
     return padded_en_in, padded_de_in, padded_de_out, padded_mask
 
 # Encode and load pretrain data
+semeval_train = get_semeval_train()
+pretrain_list = get_pretrain()
 pretrain_dataset = TranslationDataset()
 pretrain_dataset.make_vocab(pretrain_list, semeval_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
