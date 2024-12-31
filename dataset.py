@@ -255,15 +255,15 @@ class TranslationDataset(Dataset):
     def __getitem__(self, idx):
         return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], self.corpus_y_mask[idx]
 
-def get_pretrain():
-    pretrain_list = []
-    folder_path = os.path.abspath("data/processed_pretrain")
 
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".csv"):
-            file_path = os.path.join(folder_path, filename)
-            df = pd.read_csv(file_path)
-            pretrain_list.append(df)  
+pretrain_list = []
+folder_path = os.path.abspath("data/processed_pretrain")
+
+for filename in os.listdir(folder_path):
+    if filename.endswith(".csv"):
+        file_path = os.path.join(folder_path, filename)
+        df = pd.read_csv(file_path)
+        pretrain_list.append(df)  
         
 
 def get_semeval_train():
@@ -314,7 +314,6 @@ def collate_fn(batch):
 
 # Encode and load pretrain data
 semeval_train = get_semeval_train()
-pretrain_list = get_pretrain()
 pretrain_dataset = TranslationDataset()
 pretrain_dataset.make_vocab(pretrain_list, semeval_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
