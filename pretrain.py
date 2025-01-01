@@ -132,9 +132,9 @@ corpus = get_text_file_for_sentencepiece()
 
 # BPE
 # Removing dummy prefix correctly formats language codes
-spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=30000, add_dummy_prefix=False,
+spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=50000, add_dummy_prefix=False,
                                character_coverage=0.9995, model_type="bpe",
-                               user_defined_symbols=["</s>", "<es>", "<fr>", "<it>", "<de>", "<ar>", "<ja>", "<en>"])
+                               user_defined_symbols=["</s>", "<es>", "<fr>", "<it>", "<de>", "<ar>", "<ja>", "<en>", "<tr>"])
 
 def apply_bpe_tokenizer(df, column_name):
     sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
@@ -145,7 +145,7 @@ def apply_bpe_tokenizer(df, column_name):
 def get_chunks_from_corpuses(dataframes, chunk_size=35):
     """
     Inputs:
-            chunk size: the size of chunks of continuos text, defaulted at 35, which was used in pretraining the previous model and led to good results
+            chunk size: the size of chunks of continous text, defaulted at 35, which was used in pretraining the previous model and led to good results
             dataframes: a dictionary of dataframes for each language
 
     Outputs:

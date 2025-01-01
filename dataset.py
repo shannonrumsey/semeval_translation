@@ -190,7 +190,7 @@ class TranslationDataset(Dataset):
             lang = df["target_locale"]
 
             for src, trg, l in zip(source, target, lang):
-                encoder_input = src + ["</s>"] + ["<en>"]
+                encoder_input = ["<en>"] + src + ["</s>"]
                 encoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in encoder_input]
 
                 decoder_input = [l] + trg + ["</s>"]
@@ -217,7 +217,7 @@ class TranslationDataset(Dataset):
         self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
         self.corpus_y_mask)
     
-    def make_sure_everythings_alligned_properly(self):
+    def make_sure_everythings_alligned_properly(self, train = False):
         print("making sure everything looks good in the dataset")
         random_index = random.randint(0, len(self.corpus_encoder_ids) - 1) # to get a random sample from the data
         print("fetching data at random index: ", random_index)
@@ -225,18 +225,19 @@ class TranslationDataset(Dataset):
         decoder = self.corpus_decoder_ids[random_index]
         target = self.corpus_target_ids[random_index]
         mask = self.corpus_y_mask[random_index]
-        print("\n====== CHECKING LENGTHS =====")
-        print("encoder_ids: ", len(encoder), "decoder_ids: ", len(decoder), "target_ids: ", len(target), "mask_ids: ", len(mask))
-        if len(encoder) != len(decoder):
-            print("\n====== MISMATCH FOUND ======")
-            print("encoder and decoder lengths do not match!")
-            # Print the elements that do not align
-            print("\n==== MISMATCHED WORDS ====")
-            for e, d in zip(encoder, decoder):
-                real_encoder = self.inverse_vocab.get(e.item(), "<unk>")
-                real_decoder = self.inverse_vocab.get(d.item(), "<unk>")
-                if real_encoder != real_decoder:
-                    print(f"Encoder: {real_encoder} | Decoder: {real_decoder}")
+        if train is False:
+            print("\n====== CHECKING LENGTHS =====")
+            print("encoder_ids: ", len(encoder), "decoder_ids: ", len(decoder), "target_ids: ", len(target), "mask_ids: ", len(mask))
+            if len(encoder) != len(decoder):
+                print("\n====== MISMATCH FOUND ======")
+                print("encoder and decoder lengths do not match!")
+                # Print the elements that do not align
+                print("\n==== MISMATCHED WORDS ====")
+                for e, d in zip(encoder, decoder):
+                    real_encoder = self.inverse_vocab.get(e.item(), "<unk>")
+                    real_decoder = self.inverse_vocab.get(d.item(), "<unk>")
+                    if real_encoder != real_decoder:
+                        print(f"Encoder: {real_encoder} | Decoder: {real_decoder}")
 
         #print("\n======= numerical values ======")
         #print("\nencoder_ids: ", encoder, "\ndecoder_ids: ", decoder, "\ntarget_ids: ", target, "\nmask_ids: ", mask)
@@ -318,7 +319,8 @@ pretrain_dataset = TranslationDataset()
 pretrain_dataset.make_vocab(pretrain_list, semeval_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
 # No padding in the pretrainig data
-pretrain_loader = DataLoader(pretrain_dataset, batch_size=64, shuffle=True)
+pretrain_loader = DataLoader(pretrain_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+print("🔎😮‍💨 analyzing pretrain dataset")
 pretrain_dataset.make_sure_everythings_alligned_properly()
 
 # Encode and load train data
@@ -327,4 +329,7 @@ semeval_dataset.make_vocab(pretrain_list, semeval_train)
 train_data = get_semeval_train()
 semeval_dataset.encode_semeval(train_data)
 train_loader = DataLoader(semeval_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+print("🔎😮‍💨 analyzing train dataset ")
 semeval_dataset.make_sure_everythings_alligned_properly()
+
+
