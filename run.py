@@ -1,31 +1,105 @@
-from dataset import TranslationDataset, get_semeval_train, collate_fn, get_pretrain
+from dataset import pretrain_loader, train_loader, pretrain_dataset
 import sys
-import json
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.nn.utils.rnn import pad_sequence
-import pandas as pd
+from torch import nn
+from torch import optim
 import os
-import json
-import sentencepiece as spm
-import random
-import ast
 
-pretrain_list = get_pretrain()
-semeval_train = get_semeval_train()
+seed = 27
+torch.manual_seed(seed)
 
-# # Encode and load pretrain data
-pretrain_dataset = TranslationDataset()
-pretrain_dataset.make_vocab(pretrain_list, semeval_train)
-# pretrain_dataset.encode_pretrain(pretrain_list)
-# # No padding in the pretrainig data
-# pretrain_loader = DataLoader(pretrain_dataset, batch_size=64, shuffle=True)
-# pretrain_dataset.make_sure_everythings_alligned_properly()
+# Determine if GPU available
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
 
-# # Encode and load train data
-# semeval_dataset = TranslationDataset()
-# semeval_dataset.make_vocab(pretrain_list, semeval_train)
-# train_data = get_semeval_train()
-# semeval_dataset.encode_semeval(train_data)
-# train_loader = DataLoader(semeval_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
-# semeval_dataset.make_sure_everythings_alligned_properly()
+
+class PositionalEncoding(nn.Module):
+    """
+    Takes in an encoded input and outputs the sum of the positional representations and the learned semantic embeddings
+    e.g. [The, cat, sat, on, the, mat] -> [0, 1, 2, 3, 4, 5]
+    """
+    def __init__(self, n_embd, max_len=5000):
+        super().__init__()
+        self.pos_embedding = nn.Embedding(max_len, n_embd)
+
+    def forward(self, x):
+        # .view() ensures the correct tensor shape
+        pos = torch.arange(x.size(1), device=x.device).view(1, x.size(1))
+        embedding = self.pos_embedding(pos)
+        return x + embedding
+    
+class TransformerEncoder(nn.Module):
+    """
+    No masking for self-attention
+    """
+    def __init__(self, vocab_size, n_embd, n_head, n_layer):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, n_embd)
+        self.pos_embedding = PositionalEncoding(n_embd)
+
+        encoder_layer = nn.TransformerEncoderLayer(n_embd, n_head, batch_first=True)
+        self.encoder = nn.TransformerEncoder(encoder_layer, n_layer)
+
+        self.fc_out = nn.Linear(n_embd, vocab_size)
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x = self.pos_embedding(x)
+        out = self.encoder(x)
+        # Project output
+        out = self.fc_out(out)
+
+        return out
+
+class TransformerDecoder(nn.Module):
+    """
+    Requires masking for cross-attention
+    """
+    def __init__(self):
+        pass
+
+    def forward(self):
+        pass
+
+vocab_size = len(pretrain_dataset.vocab)
+n_embd = 128
+n_head = 4
+n_layer = 6
+num_epoch = 10
+pos = PositionalEncoding(n_embd)
+encoder = TransformerEncoder(vocab_size=vocab_size,
+                             n_embd=n_embd,
+                             n_head=n_head,
+                             n_layer=n_layer).to(device)
+pad_index = pretrain_dataset.vocab["<PAD>"]
+loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
+enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
+dec_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
+encoder_path = os.path.join(os.path.dirname(__file__), "encoder_model")
+decoder_path = os.path.join(os.path.dirname(__file__), "decoder_model")
+
+for step in range(num_epoch):
+
+    encoder.train()
+    # decoder.train()
+    for enc, dec, trg, msk in pretrain_loader:
+        enc = enc.to(device)
+        dec = dec.to(device)
+        trg = trg.to(device)
+        msk = msk.to(device)
+
+        enc_optimizer.zero_grad()
+        dec_optimizer.zero_grad()
+
+        encoder_outputs = encoder(enc.to(device))
+        # decoder_outputs = decoder(encoder_outputs.to(device))
+
+        enc_optimizer.step()
+        dec_optimizer.step()
+        
+
+

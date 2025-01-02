@@ -320,8 +320,8 @@ pretrain_dataset.make_vocab(pretrain_list, semeval_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
 # No padding in the pretrainig data
 pretrain_loader = DataLoader(pretrain_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
-print("🔎😮‍💨 analyzing pretrain dataset")
-pretrain_dataset.make_sure_everythings_alligned_properly()
+# print("🔎😮‍💨 analyzing pretrain dataset")
+# pretrain_dataset.make_sure_everythings_alligned_properly()
 
 # Encode and load train data
 semeval_dataset = TranslationDataset()
@@ -329,7 +329,7 @@ semeval_dataset.make_vocab(pretrain_list, semeval_train)
 train_data = get_semeval_train()
 semeval_dataset.encode_semeval(train_data)
 train_loader = DataLoader(semeval_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
-print("🔎😮‍💨 analyzing train dataset ")
-semeval_dataset.make_sure_everythings_alligned_properly()
+# print("🔎😮‍💨 analyzing train dataset ")
+# semeval_dataset.make_sure_everythings_alligned_properly()
 
 
