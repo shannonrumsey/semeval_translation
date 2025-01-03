@@ -87,20 +87,48 @@ class TransformerEncoder(nn.Module):
     def forward(self, x, entity_info=None):
         # entity info should be a tensor of shape (entity_seq_len, embedding dim)
 
+        # NOTE: the forward function allows for entity information to influence the attention mechanizm in the encoder
+
+        """
+        Example:
+            Input =
+                (batch_size, seq_len, embedding_dim).
+                Padded and encoded input sentences:
+                ex "Who directed Up"
+            entity info = (batch_size, entity_len, embedding_dim)
+                Padded and encoded entity translations/ info
+                ex. <Oben> (where oben in the german translation)
+
+            x_with_entity = (batch_size, entity_len + seq_len, embedding_dim)
+                Padded and encoded source sentence + entity translations/ info
+                ex. Who directed Up <Oben>
+
+            if the entity is present, attention will be calculated on x_with entity, then the entity will be removed
+            What this looks like is the keys of the entity will be multiplied with the queries of the previous words to update the sentence
+            based on the entity
+
+            The surrounding words will also update the meaning of the entity at the end, but that part will be chopped off
+            then it will go into a feedforward layer without the entity info
+            then it will back into attention with the entity info added in the attention step once again then chopped
+            this will repeat 
+        """
         x = self.embedding(x)
         x = self.pos_embedding(x) # the possitional embedding takes in the encoded x and outputs the sum of the encoded and the poitional
         # thus x is the sum of embedding and positional as expected
 
         batch_size, seq_length, embed_dim = x.shape
 
-        if entity_info is not None:
-            batch_size, len_entity, embed_dim = entity_info.shape
-            x = torch.cat((x, entity_info), dim=1)
 
-        x = self.norm1(x) # normalize once before getting attention
+
 
         for layer in self.attention_layers: #each layer will be an encoder transformer block
-            attention_output = layer(x) # attention output will be (batch size, seq length, embed dim)
+            if entity_info is not None:
+                batch_size, len_entity, embed_dim = entity_info.shape
+                x_with_entity = torch.cat((x, entity_info), dim=1)
+            else:
+                x_with_entity = x # x is unchanged
+
+            attention_output = layer(x_with_entity) # attention output will be (batch size, seq length, embed dim)
             # or (batch size, seq length + entity length, embed dim)
 
             if entity_info is not None: # REMOVE extra entity info once its been used in attention
