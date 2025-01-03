@@ -21,6 +21,7 @@ class PositionalEncoding(nn.Module):
     """
     Takes in an encoded input and outputs the sum of the positional representations and the learned semantic embeddings
     e.g. [The, cat, sat, on, the, mat] -> [0, 1, 2, 3, 4, 5]
+
     """
     def __init__(self, n_embd, max_len=5000):
         super().__init__()
@@ -31,27 +32,85 @@ class PositionalEncoding(nn.Module):
         pos = torch.arange(x.size(1), device=x.device).view(1, x.size(1))
         embedding = self.pos_embedding(pos)
         return x + embedding
-    
+
+class FeedForward(nn.Module):
+    def __init__(self, n_embd):
+        """
+        Feedforward class allows the option of passing in additional information about entities
+        x will come in with dimensions batch_size, seq_len, n_embd
+        Thus to add entities information, we will need to have a tensor of entities with shape (batch_size, seq_len, embedding dim)
+        with padded and embedded entities so that each entity is the same length across each batch
+        """
+        super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.Linear(n_embd, 4 * n_embd),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(4 * n_embd, n_embd)
+        )
+
+    def forward(self, x):
+
+        return self.mlp(x)
+
+class EncoderTransformerBlock(nn.Module):
+    def __init__(self, embed_dim, num_heads):
+        super(TransformerBlock, self).__init__()
+        self.attention = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True, dropout=0.2)
+
+
+    def forward(self, x): # no attention mask needed for encoder
+        attn_output, _ = self.attention(x, x, x)
+        return attn_output
+
 class TransformerEncoder(nn.Module):
     """
     No masking for self-attention
     """
-    def __init__(self, vocab_size, n_embd, n_head, n_layer):
+    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)
-        self.pos_embedding = PositionalEncoding(n_embd)
+        self.pos_embedding = PositionalEncoding(n_embd, max_seq_len)
+        self.feedforward = FeedForward(n_embd=n_embd)  # will be applied after attention blocks
 
-        encoder_layer = nn.TransformerEncoderLayer(n_embd, n_head, batch_first=True)
-        self.encoder = nn.TransformerEncoder(encoder_layer, n_layer)
+        # layer normalization layers to use between attention blocks
+        self.norm1 = nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.attention_layers = nn.ModuleList(
+            [EncoderTransformerBlock(embed_dim, n_head, self.feedforward) for _ in range(n_layer)]
+        )
+
 
         self.fc_out = nn.Linear(n_embd, vocab_size)
 
-    def forward(self, x):
+    def forward(self, x, entity_info=None):
+        # entity info should be a tensor of shape (entity_seq_len, embedding dim)
+
         x = self.embedding(x)
-        x = self.pos_embedding(x)
-        out = self.encoder(x)
-        # Project output
-        out = self.fc_out(out)
+        x = self.pos_embedding(x) # the possitional embedding takes in the encoded x and outputs the sum of the encoded and the poitional
+        # thus x is the sum of embedding and positional as expected
+
+        batch_size, seq_length, embed_dim = x.shape
+
+        if entity_info is not None:
+            batch_size, len_entity, embed_dim = entity_info.shape
+            x = torch.cat((x, entity_info), dim=1)
+
+        x = self.norm1(x) # normalize once before getting attention
+
+        for layer in self.attention_layers: #each layer will be an encoder transformer block
+            attention_output = layer(x) # attention output will be (batch size, seq length, embed dim)
+            # or (batch size, seq length + entity length, embed dim)
+
+            if entity_info is not None: # REMOVE extra entity info once its been used in attention
+                attention_output = attention_output[:, :-len_entity, :] # this will return our vector to (batch size, seq len, embedding dim)
+
+            x = self.norm1(x + attention_output) # resid connection and normalize
+            feedforward_output = self.feedforward(x)
+            x = self.norm2(x + feedforward_output) # resid connection and normalize
+
+        out = self.fc_out(x)
 
         return out
 
@@ -66,6 +125,16 @@ class TransformerDecoder(nn.Module):
         pass
 
 vocab_size = len(pretrain_dataset.vocab)
+
+# in order to set the proper size for max seq length for our positional embeddings
+def find_max_sequence_length(dataset):
+    max_length = max(len(x_ids) for x_ids in dataset.corpus_x_ids)
+    return max_length
+
+max_seq_len_pretrain = find_max_sequence_length(pretrain_dataset)
+max_seq_len_train = find_max_sequence_length(train_dataset)
+max_seq_len = max(max_seq_len_pretrain, max_seq_len_train)
+
 n_embd = 128
 n_head = 4
 n_layer = 6
@@ -74,7 +143,8 @@ pos = PositionalEncoding(n_embd)
 encoder = TransformerEncoder(vocab_size=vocab_size,
                              n_embd=n_embd,
                              n_head=n_head,
-                             n_layer=n_layer).to(device)
+                             n_layer=n_layer,
+                             max_seq_len= max_seq_len).to(device)
 pad_index = pretrain_dataset.vocab["<PAD>"]
 loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
 enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
