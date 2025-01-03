@@ -33,36 +33,12 @@ class PositionalEncoding(nn.Module):
         embedding = self.pos_embedding(pos)
         return x + embedding
 
-class FeedForward(nn.Module):
-    def __init__(self, n_embd):
-        """
-        Feedforward class allows the option of passing in additional information about entities
-        x will come in with dimensions batch_size, seq_len, n_embd
-        Thus to add entities information, we will need to have a tensor of entities with shape (batch_size, seq_len, embedding dim)
-        with padded and embedded entities so that each entity is the same length across each batch
-        """
-        super().__init__()
-        self.mlp = nn.Sequential(
-            nn.Dropout(0.3),
-            nn.Linear(n_embd, 4 * n_embd),
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(4 * n_embd, n_embd)
-        )
-
-    def forward(self, x):
-
-        return self.mlp(x)
-
-class EncoderTransformerBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads):
-        super(TransformerBlock, self).__init__()
-        self.attention = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True, dropout=0.2)
 
 
-    def forward(self, x): # no attention mask needed for encoder
-        attn_output, _ = self.attention(x, x, x)
-        return attn_output
+
+from Attention import EncoderAttentionBlock # see the file Attention.py
+from Attention import DecoderAttentionBlock # see the file Attention.py
+from Attention import CrossAttentionBlock # see the file Attention.py
 
 class TransformerEncoder(nn.Module):
     """
@@ -72,85 +48,92 @@ class TransformerEncoder(nn.Module):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)
         self.pos_embedding = PositionalEncoding(n_embd, max_seq_len)
-        self.feedforward = FeedForward(n_embd=n_embd)  # will be applied after attention blocks
 
-        # layer normalization layers to use between attention blocks
-        self.norm1 = nn.LayerNorm(embed_dim)
-        self.norm2 = nn.LayerNorm(embed_dim)
         self.attention_layers = nn.ModuleList(
-            [EncoderTransformerBlock(embed_dim, n_head, self.feedforward) for _ in range(n_layer)]
+            [EncoderAttentionBlock(embed_dim, n_head) for _ in range(n_layer)]
         )
 
 
-        self.fc_out = nn.Linear(n_embd, vocab_size)
-
-    def forward(self, x, entity_info=None):
+    def forward(self, x, entity_info = None):
+        """
+        :param x: dim =  (batch size, seq_len)
+        :param embedded entity_info: dim = (entity_seq_len, embedding dim)
+        :return: encoding embedding
+        NOTE: this code implies that we will need to write a seperate function for generating embeddings for the entity information
+        """
         # entity info should be a tensor of shape (entity_seq_len, embedding dim)
 
-        # NOTE: the forward function allows for entity information to influence the attention mechanizm in the encoder
-
-        """
-        Example:
-            Input =
-                (batch_size, seq_len, embedding_dim).
-                Padded and encoded input sentences:
-                ex "Who directed Up"
-            entity info = (batch_size, entity_len, embedding_dim)
-                Padded and encoded entity translations/ info
-                ex. <Oben> (where oben in the german translation)
-
-            x_with_entity = (batch_size, entity_len + seq_len, embedding_dim)
-                Padded and encoded source sentence + entity translations/ info
-                ex. Who directed Up <Oben>
-
-            if the entity is present, attention will be calculated on x_with entity, then the entity will be removed
-            What this looks like is the keys of the entity will be multiplied with the queries of the previous words to update the sentence
-            based on the entity
-
-            The surrounding words will also update the meaning of the entity at the end, but that part will be chopped off
-            then it will go into a feedforward layer without the entity info
-            then it will back into attention with the entity info added in the attention step once again then chopped
-            this will repeat 
-        """
         x = self.embedding(x)
         x = self.pos_embedding(x) # the possitional embedding takes in the encoded x and outputs the sum of the encoded and the poitional
         # thus x is the sum of embedding and positional as expected
 
-        batch_size, seq_length, embed_dim = x.shape
 
 
+        for attention_layer in self.attention_layers: #each layer will be a encoder attention block
+            x = attention_layer(x, entity_info = None) # this can be changed if entity info is present
+            # Once again, see Attention.py for the documentation of this function,
+            # but esentially it mimics a full attention block with attention, feedforward, residual connections and layer normalization
+            # it uses dropout = .2 in attention and dropout = .3 in feedforward
 
+        # no linear layer in the output is needed
 
-        for layer in self.attention_layers: #each layer will be an encoder transformer block
-            if entity_info is not None:
-                batch_size, len_entity, embed_dim = entity_info.shape
-                x_with_entity = torch.cat((x, entity_info), dim=1)
-            else:
-                x_with_entity = x # x is unchanged
-
-            attention_output = layer(x_with_entity) # attention output will be (batch size, seq length, embed dim)
-            # or (batch size, seq length + entity length, embed dim)
-
-            if entity_info is not None: # REMOVE extra entity info once its been used in attention
-                attention_output = attention_output[:, :-len_entity, :] # this will return our vector to (batch size, seq len, embedding dim)
-
-            x = self.norm1(x + attention_output) # resid connection and normalize
-            feedforward_output = self.feedforward(x)
-            x = self.norm2(x + feedforward_output) # resid connection and normalize
-
-        out = self.fc_out(x)
-
-        return out
+        return x
 
 class TransformerDecoder(nn.Module):
     """
     Requires masking for cross-attention
     """
-    def __init__(self):
-        pass
 
-    def forward(self):
-        pass
+
+    def __init__(self, max_seq_length, embed_dim, num_heads, vocab_size, attention_layers=5):
+        super(DecoderTransformerTranslator, self).__init__()
+        self.token_embedding_table = nn.Embedding(vocab_size, embed_dim)  # will give us token embeddings
+        self.position_embedding_table = nn.Embedding(max_seq_length,
+                                                     embed_dim)
+        self.last_linear_layer = nn.Linear(embed_dim,
+                                           vocab_size)  # go from embeddings to outputs. Made sure that this is the vocab size in order to not have errors where the perplexity is artifically low
+        # normalization for input
+
+
+        self.self_attention_layers = nn.ModuleList(
+            [DecoderAttentionBlock(embed_dim, num_heads, self.feedforward) for _ in range(attention_layers)]
+        ) # see Attention.py for documentation
+        self.cross_attention_layers= nn.ModuleList(
+            [CrossAttentionBlock(embed_dim, num_heads, self.feedforward) for _ in range(attention_layers)]
+        ) # see Attention.py for documentation
+
+    def forward(self, decoder_input, encoder_output, entity_info = None):
+        """
+        Forward pass through the decoder, using both self-attention and cross-attention.
+
+        :param decoder_input: The input to the decoder (batch_size, decoder_seq_len)
+        :param encoder_output: The output from the encoder (batch_size, encoder_seq_len, embed_dim)
+        :param embedded entity_info: dim = (entity_seq_len, embedding dim)
+        :return: The decoder output (batch_size, seq_len, vocab_size)
+
+
+        """
+        seq_len = decoder_input.size(1)
+
+        # embedd the decoder input 
+        token_embeddings = self.token_embedding_table(decoder_input)  # batch, seq len, embedding size
+
+        position_embeddings = self.position_embedding_table(torch.arange(seq_length, device=device))
+        
+        x = token_embeddings + position_embeddings  # adding token and position embeddings
+
+        # pass through self-attention layers
+        for self_attn_block in self.self_attention_layers:
+            x = self_attn_block(x, entity_info)
+
+        # pass through cross-attention layers
+        for cross_attn_block in self.cross_attention_layers:
+            x = cross_attn_block(x, encoder_output, entity_info)
+
+        # final linear layer to map to vocab size
+        output = self.last_linear_layer(x)  # (batch_size, seq_len, vocab_size)
+
+        return output
 
 vocab_size = len(pretrain_dataset.vocab)
 
@@ -173,6 +156,7 @@ encoder = TransformerEncoder(vocab_size=vocab_size,
                              n_head=n_head,
                              n_layer=n_layer,
                              max_seq_len= max_seq_len).to(device)
+decoder = TransformerDecoder(max_seq_length = max_seq_len, embed_dim = n_embd, num_heads = n_head, vocab_size = vocab_size).to(device)
 pad_index = pretrain_dataset.vocab["<PAD>"]
 loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
 enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
@@ -183,7 +167,8 @@ decoder_path = os.path.join(os.path.dirname(__file__), "decoder_model")
 for step in range(num_epoch):
 
     encoder.train()
-    # decoder.train()
+    decoder.train()
+
     for enc, dec, trg, msk in pretrain_loader:
         enc = enc.to(device)
         dec = dec.to(device)
@@ -193,11 +178,23 @@ for step in range(num_epoch):
         enc_optimizer.zero_grad()
         dec_optimizer.zero_grad()
 
-        encoder_outputs = encoder(enc.to(device))
-        # decoder_outputs = decoder(encoder_outputs.to(device))
+
+        encoder_outputs = encoder(enc)
+
+
+        decoder_outputs = decoder(dec, encoder_outputs)
+
+
+        loss = loss_fn(decoder_outputs.view(-1, vocab_size), trg.view(-1))
+
+
+        loss.backward()
 
         enc_optimizer.step()
         dec_optimizer.step()
+
+        print(f"Epoch {step+1}/{num_epoch}, Loss: {loss.item()}")
+
         
 
 
