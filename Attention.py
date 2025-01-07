@@ -1,3 +1,20 @@
+import torch
+import torch.nn as nn
+import sys
+from dataset import pretrain_dataset
+
+seed = 27
+torch.manual_seed(seed)
+
+# Determine if GPU available
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
+
+
 '''
 This file contains code for the decoder self attention, encoder self attention, and cross attention
 
@@ -27,39 +44,39 @@ All attention functions allow the user to pass in additional entity info. This i
 
 '''
 
-import torch
-import torch.nn as nn
-
-class EncoderAttentionBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads):
+class EncoderLayers(nn.Module):
+    def __init__(self, n_embd, n_head):
         """
-        :param embed_dim: the embedding dim
-        :param num_heads: the number of attention heads
+        Args:
+            n_embd: The embedding dimension
+            n_head: The number of attention heads
+            x: Encoder input sentence
+            entity_info (Optional): Entity embeddings
 
         Function preforms unmasked self attention, complete with a feedforward layer, layer normalization, and residual connections
-        Function gives option to include entity information
+        Function gives option to include entity embeddings for experimentation
         """
-        super(TransformerBlock, self).__init__()
-        self.EncoderAttention = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True, dropout=0.2)
+        super().__init__()
+        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.2)
 
         # for self attention in encoder
-        self.Enorm1 = nn.LayerNorm(embed_dim)
-        self.Enorm2 = nn.LayerNorm(embed_dim)
+        self.Enorm1 = nn.LayerNorm(n_embd)
+        self.Enorm2 = nn.LayerNorm(n_embd)
 
         # feedforward layers with .3 dropout for regularization
-        self.EncoderFeedforward = nn.Sequential(nn.Linear(embed_dim, 4 * embed_dim), nn.ReLU(), nn.Dropout(0.3),
-                                                nn.Linear(4 * embed_dim, embed_dim))
-
+        self.EncoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.GELU(), nn.Dropout(0.3),
+                                                nn.Linear(4 * n_embd, n_embd))
 
     # gets self attention for self. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
-    def forward(self, x, entity_info = None):
+    def forward(self, x, entity_info=None):
         if entity_info is not None:
             x_with_entity = torch.cat((x, entity_info), dim=1)
             len_entity = entity_info.shape[1]
         else:
             x_with_entity = x  # use normal x if no entity info is added
             len_entity = 0
-        attn_output, _ = self.EncoderAttentionattention(x_with_entity, x_with_entity, x_with_entity)
+
+        attn_output, _ = self.EncoderAttention(x_with_entity, x_with_entity, x_with_entity)
 
         if entity_info is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,:]  # this will return our vector to (batch size, seq len, embedding dim)
@@ -67,32 +84,45 @@ class EncoderAttentionBlock(nn.Module):
         x = self.Enorm1(x + attn_output) # resid connection and
         feedforward_output = self.EncoderFeedforward(x)
         x = self.Enorm2(x + feedforward_output)
+
         return x
 
 # decoder self attention block
-class DecoderAttentionBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads):
-        super(TransformerBlock, self).__init__()
+class DecoderLayers(nn.Module):
+    """
+    Args:
+        n_embd: The embedding dimension
+        n_head: The number of attention heads
+        x: Decoder input sentence
+        seq_len: Length of input x for making mask
+        entity_info (Optional): Entity embeddings
+        entity_len (Optional): Accounts for entity when creating mask
 
-        self.DecoderAttention = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True, dropout=0.2)
-
+    Uses cross-attention with masking to create translation using Encoder's hidden states, entity embeddings, and decoder input
+    """
+    def __init__(self, n_embd, n_head):
+        super().__init__()
+        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.2)
 
         # for self attention in decoder
-        self.Dnorm1 = nn.LayerNorm(embed_dim)
-        self.Dnorm2 = nn.LayerNorm(embed_dim)
-
-
+        self.Dnorm1 = nn.LayerNorm(n_embd)
+        self.Dnorm2 = nn.LayerNorm(n_embd)
 
         # feedforward layer with .3 dropout for regularization
+        self.DecoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(), nn.Dropout(0.3),
+                                                nn.Linear(4 * n_embd, n_embd))
 
-        self.DecoderFeedforward = nn.Sequential(nn.Linear(embed_dim, 4 * embed_dim), nn.ReLU(), nn.Dropout(0.3),
-                                                nn.Linear(4 * embed_dim, embed_dim))
-
-
-
-
-
-    def create_attention_mask(self, seq_len, entity_len):
+    # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
+    # creates mask inside function
+    def forward(self, x, entity_info=None):
+        if entity_info is not None:
+            # Decoder entity info would need to be added to the beginning or else it would be masked out
+            x_with_entity = torch.cat((entity_info, x), dim=1) 
+            len_entity = entity_info.shape[1]
+        else:
+            x_with_entity = x
+            len_entity = 0
+        
         # either returns a normal self attention mask, or one modified for entity information
         # either returns seq_len, seq_len mask or (seq_len + entity_len), (seq_len + entity_len) with the diagonal shifter
         # this appends 0s (which nn.attention interprets as areas NOT to mask) to the beginning of the mask
@@ -105,21 +135,14 @@ class DecoderAttentionBlock(nn.Module):
         #  0, 0, 0, 1
         #  0, 0, 0, 0] NOTE: in nn.Module, the 1s are masked out, not the 0s.
 
-        mask = torch.triu(torch.ones(seq_len + entity_len, seq_len + entity_len, device=device), diagonal= entity_len +1).bool()
-        return mask
+        # Attention mask
+        mask = torch.triu(torch.ones(x.shape[1] + len_entity, x.shape[1] + len_entity, device=device), diagonal= len_entity +1).bool()
 
-    # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
-    # creates mask inside function
-    def forward(self, x, entity_info = None):
-        if entity_info is not None:
-            x_with_entity = torch.cat((entity_info, x), dim=1) # in decoder entity info would need to be added to the beginning or else it would be masked out
-            len_entity = entity_info.shape[1]
-        else:
-            x_with_entity = x
-            len_entity = 0
-        mask = self.create_attention_mask(seq_len=x.shape[1], entity_len=len_entity)
-        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask = mask)
+        # Padding mask (pretrain_dataset and semeval_dataset should have same vocab)
+        pad_mask = (x == pretrain_dataset.vocab["<PAD>"])
+        pad_mask = pad_mask.any(dim=-1)
 
+        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
 
         if entity_info is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,
@@ -128,30 +151,25 @@ class DecoderAttentionBlock(nn.Module):
         x = self.Dnorm1(x + attn_output)  # resid connection and layer norm
         feedforward_output = self.DecoderFeedforward(x)
         x = self.Dnorm2(x + feedforward_output)
+
         return x
-
-
-
 
 
 # cross attention block
 class CrossAttentionBlock(nn.Module):
-    def __init__(self, embed_dim, num_heads):
-        super(TransformerBlock, self).__init__()
+    def __init__(self, n_embd, n_head):
+        super().__init__()
 
-        self.CrossAttention = nn.MultiheadAttention(embed_dim, num_heads=num_heads, batch_first=True, dropout=0.2)
-
+        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.2)
 
         # for cross attention
-        self.Cnorm1 = nn.LayerNorm(embed_dim)
-        self.Cnorm2 = nn.LayerNorm(embed_dim)
+        self.Cnorm1 = nn.LayerNorm(n_embd)
+        self.Cnorm2 = nn.LayerNorm(n_embd)
 
         # feedforward layer with .3 dropout for regularization
-
-        self.CrossFeedforward = nn.Sequential(nn.Linear(embed_dim, 4 * embed_dim), nn.ReLU(), nn.Dropout(0.3),
-                                              nn.Linear(4 * embed_dim, embed_dim))
-
-
+        self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.GELU(), nn.Dropout(0.3),
+                                              nn.Linear(4 * n_embd, n_embd))
+    
     def forward(self, decoder_input, encoder_output, entity_info=None):
             # concatenate entity_info to the encoder inputs if provided
             if entity_info is not None:
@@ -161,20 +179,23 @@ class CrossAttentionBlock(nn.Module):
                 encoder_output_with_entity = encoder_output
                 len_entity = 0
 
+            # Attention mask
+            mask = torch.triu(torch.ones(decoder_input.shape[1] + len_entity, decoder_input.shape[1] + len_entity, device=device), diagonal=len_entity+1).bool()
 
-            mask = self.create_attention_mask(seq_len=decoder_input.shape[1], entity_len=len_entity)
+            # Padding mask
+            pad_mask = (decoder_input == pretrain_dataset.vocab["<PAD>"])
+            pad_mask = pad_mask.any(dim=-1)
 
             # get cross-attention (decoder query, encoder key & value)
-            attn_output, _ = self.CrossAttention(decoder_input_with_entity, encoder_output_with_entity,
-                                                 encoder_output_with_entity, attn_mask=mask)
-            # output will be of size: (batch_size, seq_len_decoder, embed_dim)
+            attn_output, _ = self.CrossAttention(encoder_output_with_entity, encoder_output_with_entity,
+                                                 encoder_output_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
+            # output will be of size: (batch_size, seq_len_decoder, n_embd)
             # no need to remove the entity info because it was in the encoder. (only used as a key and not a query)
 
-
             # apply residual connection and normalization
-            x = self.CrossNorm1(decoder_input + attn_output)
+            x = self.Cnorm1(decoder_input + attn_output)
             feedforward_output = self.CrossFeedforward(x)
-            x = self.CrossNorm2(x + feedforward_output)
+            x = self.Cnorm2(x + feedforward_output)
 
             return x
 

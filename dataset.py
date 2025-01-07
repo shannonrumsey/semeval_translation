@@ -8,6 +8,7 @@ import json
 import sentencepiece as spm
 import random
 import ast
+from sklearn.model_selection import train_test_split
 
 # define dataset
 print("defining the dataset")
@@ -300,6 +301,7 @@ def get_semeval_train():
 
     return semeval_train
 
+# Chunking not done on training data b/c source and translation must line up
 def collate_fn(batch):
     encoder_input = [item[0] for item in batch]
     decoder_input = [item[1] for item in batch]
@@ -318,8 +320,10 @@ semeval_train = get_semeval_train()
 pretrain_dataset = TranslationDataset()
 pretrain_dataset.make_vocab(pretrain_list, semeval_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
+pretrain_train, pretrain_val = train_test_split(pretrain_dataset, test_size=0.1, random_state=27)
 # No padding in the pretrainig data
-pretrain_loader = DataLoader(pretrain_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+pretrain_train_loader = DataLoader(pretrain_train, batch_size=64, shuffle=True, collate_fn=collate_fn)
+pretrain_val_loader = DataLoader(pretrain_val, batch_size=64, shuffle=True, collate_fn=collate_fn)
 # print("🔎😮‍💨 analyzing pretrain dataset")
 # pretrain_dataset.make_sure_everythings_alligned_properly()
 
@@ -328,7 +332,11 @@ semeval_dataset = TranslationDataset()
 semeval_dataset.make_vocab(pretrain_list, semeval_train)
 train_data = get_semeval_train()
 semeval_dataset.encode_semeval(train_data)
-train_loader = DataLoader(semeval_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+semeval_train, semeval_val = train_test_split(semeval_dataset, test_size=0.1, random_state=27)
+semeval_train, semeval_test = train_test_split(semeval_train, test_size=0.2, random_state=27)
+semeval_train_loader = DataLoader(semeval_train, batch_size=64, shuffle=True, collate_fn=collate_fn)
+semeval_val_loader = DataLoader(semeval_val, batch_size=64, shuffle=True, collate_fn=collate_fn)
+semeval_test_loader = DataLoader(semeval_test, batch_size=64, shuffle=True, collate_fn=collate_fn)
 # print("🔎😮‍💨 analyzing train dataset ")
 # semeval_dataset.make_sure_everythings_alligned_properly()
 
