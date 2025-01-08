@@ -41,7 +41,7 @@ class TransformerEncoder(nn.Module):
         self.pos_embedding = PositionalEncoding(n_embd, max_seq_len)
 
         self.attention_layers = nn.ModuleList(
-            [EncoderLayers(n_embd, n_head) for _ in range(n_layer)]
+            [CrossAttentionBlock(n_embd, n_head) for _ in range(n_layer)]
         )
 
     def forward(self, x, entity_info=None):
@@ -60,13 +60,16 @@ class TransformerEncoder(nn.Module):
         
         # Mimics PyTorch's TransformerEncoder
         for attention_layer in self.attention_layers:
-            x = attention_layer(x, entity_info = None)
+            # if entity info is provided, it will do cross attention using x + entity info as the keys and values and x as the query
+            # if no info is provided, it will just do normal self attention
+            x = attention_layer(x, x, entity_info = None)
+
 
         return x
 
 class TransformerDecoder(nn.Module):
     """
-    Requires masking for cross-attention
+    Requires masking for self-attention
     """
     def __init__(self, max_seq_length, n_embd, n_head, vocab_size, attention_layers=5):
         super().__init__()
