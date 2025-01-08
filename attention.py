@@ -141,7 +141,7 @@ class DecoderLayers(nn.Module):
         # Padding mask (pretrain_dataset and semeval_dataset should have same vocab)
         pad_mask = (x == pretrain_dataset.vocab["<PAD>"])
         pad_mask = pad_mask.any(dim=-1)
-        print(pad_mask)
+
 
         attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
 
@@ -180,8 +180,7 @@ class CrossAttentionBlock(nn.Module):
                 encoder_output_with_entity = encoder_output
                 len_entity = 0
 
-            # Attention mask
-            mask = torch.triu(torch.ones(decoder_input.shape[1] + len_entity, decoder_input.shape[1] + len_entity, device=device), diagonal=len_entity+1).bool()
+
 
             # Padding mask
             pad_mask = (decoder_input == pretrain_dataset.vocab["<PAD>"])
@@ -189,7 +188,7 @@ class CrossAttentionBlock(nn.Module):
 
             # get cross-attention (decoder query, encoder key & value)
             attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,
-                                                 encoder_output_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
+                                                 encoder_output_with_entity, key_padding_mask=pad_mask)
             # output will be of size: (batch_size, seq_len_decoder, n_embd)
             # no need to remove the entity info because it was in the encoder. (only used as a key and not a query)
 
