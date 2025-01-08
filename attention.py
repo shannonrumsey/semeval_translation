@@ -44,7 +44,7 @@ All attention functions allow the user to pass in additional entity info. This i
 
 '''
 
-'''class EncoderLayers(nn.Module):
+class EncoderLayers(nn.Module):
     def __init__(self, n_embd, n_head):
         """
         Args:
@@ -85,7 +85,7 @@ All attention functions allow the user to pass in additional entity info. This i
         feedforward_output = self.EncoderFeedforward(x)
         x = self.Enorm2(x + feedforward_output)
 
-        return x'''
+        return x
 
 # decoder self attention block
 class DecoderLayers(nn.Module):
