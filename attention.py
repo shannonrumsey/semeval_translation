@@ -183,7 +183,7 @@ class CrossAttentionBlock(nn.Module):
 
 
             # Padding mask
-            pad_mask = (decoder_input == pretrain_dataset.vocab["<PAD>"])
+            pad_mask = (encoder_output_with_entity == pretrain_dataset.vocab["<PAD>"])
             pad_mask = pad_mask.any(dim=-1)
 
             # get cross-attention (decoder query, encoder key & value)
