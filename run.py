@@ -110,7 +110,7 @@ train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/tra
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model")
 
 # Pretrain model
-run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader, val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path, pretrain_decoder_path=pretrain_decoder_path, train=False)
+#run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader, val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path, pretrain_decoder_path=pretrain_decoder_path, train=False)
 
 # Train model
 run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader, val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path, pretrain_decoder_path=pretrain_decoder_path, train=True)
