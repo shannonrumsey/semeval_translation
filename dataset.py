@@ -191,13 +191,13 @@ class TranslationDataset(Dataset):
             lang = df["target_locale"]
 
             for src, trg, l in zip(source, target, lang):
-                encoder_input = ["<en>"] + src + ["</s>"]
+                encoder_input = [l] + src + ["</s>"]
                 encoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in encoder_input]
 
-                decoder_input = [l] + trg + ["</s>"]
+                decoder_input = trg + ["</s>"]
                 decoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in decoder_input]
 
-                target = decoder_input[1:] + [l]
+                target = decoder_input[1:] + [l]  # Add random token to end to ensure deocder input length = target length
                 target_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in target]
 
         

@@ -13,12 +13,27 @@ elif torch.backends.mps.is_available():
 else:
     device = torch.device("cpu")
 
-
-class PositionalEncoding(nn.Module):
+class EntityEmbedding(nn.Module):
     """
-    Takes in an encoded input and outputs the sum of the positional representations and the learned semantic embeddings
-    e.g. [The, cat, sat, on, the, mat] -> [0, 1, 2, 3, 4, 5]
+    Takes in encoded entity tokens and returns entity embeddings
+    Entity_tok (Tensor): BPE encoded entities
+        e.g. ["Be", "yon", "ce"]
+    
+    Notes:
+        - Assumes that the entities line up with the model inputs
+    """
+    def __init__(self, n_embd, entity_len=5000):
+        super().__init__()
+        self.entity_embedding = nn.Embedding(entity_len, n_embd)
 
+    def forward(self, entity_tok):
+        embedding = self.entity_embedding(entity_tok)
+        return embedding
+
+
+class PositionalEmbedding(nn.Module):
+    """
+    Takes in an embedded input and outputs the sum of the positional representations and the learned semantic embeddings
     """
     def __init__(self, n_embd, max_len=5000):
         super().__init__()
@@ -38,11 +53,13 @@ class TransformerEncoder(nn.Module):
     def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)
-        self.pos_embedding = PositionalEncoding(n_embd, max_seq_len)
+        self.pos_embedding = PositionalEmbedding(n_embd, max_seq_len)
 
         self.attention_layers = nn.ModuleList(
             [CrossAttentionBlock(n_embd, n_head) for _ in range(n_layer)]
         )
+
+
 
     def forward(self, x, entity_info=None):
         """
@@ -59,7 +76,7 @@ class TransformerEncoder(nn.Module):
         x = self.pos_embedding(x)
         
         # Mimics PyTorch's TransformerEncoder
-        for attention_layer in self.attention_layers:
+        for attention_layer in self.attention_layers: 
             # if entity info is provided, it will do cross attention using x + entity info as the keys and values and x as the query
             # if no info is provided, it will just do normal self attention
             x = attention_layer(x, x, entity_info = None)

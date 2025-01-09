@@ -118,10 +118,10 @@ def get_text_file_for_sentencepiece():
         big_df = pd.concat([big_df, value], ignore_index=True)
 
     corpus = "\n".join(big_df["text"].dropna())
-    with open("corpus_for_bpe.txt", "w", encoding="utf-8") as f:
+    with open("tokenizer/corpus_for_bpe.txt", "w", encoding="utf-8") as f:
         f.write(corpus)
 
-    return "corpus_for_bpe.txt"
+    return "tokenizer/corpus_for_bpe.txt"
 
 
 corpus = get_text_file_for_sentencepiece()
@@ -129,12 +129,12 @@ corpus = get_text_file_for_sentencepiece()
 
 # BPE
 # Removing dummy prefix correctly formats language codes
-spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer_combined", vocab_size=50000, add_dummy_prefix=False,
+spm.SentencePieceTrainer.train(input=corpus, model_prefix="tokenizer/tokenizer_combined", vocab_size=50000, add_dummy_prefix=False,
                                character_coverage=0.9995, model_type="bpe",
                                user_defined_symbols=["</s>", "<es>", "<fr>", "<it>", "<de>", "<ar>", "<ja>", "<en>", "<tr>"])
 
 def apply_bpe_tokenizer(df, column_name):
-    sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
+    sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
     df[column_name] = df[column_name].apply(lambda text: sp.encode(text, out_type=str))
     return df
 
@@ -174,7 +174,7 @@ def get_chunks_from_corpuses(dataframes, chunk_size=35):
         while len(not_processed) > chunk_size:
             current_chunk = not_processed[:chunk_size]
             if key[0] == "<":
-                chunks.append([key] + current_chunk) # for some reason, some of the keys are in the form "en" and others are in the form "<en>"
+                chunks.append([key] + current_chunk) # some of the keys are in the form "en" and others are in the form "<en>"
             else:
                 chunks.append(["<" + key + ">"] + current_chunk)
 
@@ -235,7 +235,9 @@ def noise(row, rng):
     # Add lang code at the end to make shifted the same length as text
     print("printing text[0]")
     print([text[0]])
-    shifted = text[1:] + [text[0]]
+    shifted = text[2:] + [text[0]]
+    # remove language code from beginning of decoder output
+    text = text[1:]
     
     # move text over an indices to be decoder input
     return noisy_row, text, shifted

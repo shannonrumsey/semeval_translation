@@ -3,7 +3,7 @@ import os
 import torch
 from torch import nn
 from torch import optim
-from model import PositionalEncoding, TransformerEncoder, TransformerDecoder, device
+from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
 import sys
 
 vocab_size = len(pretrain_dataset.vocab)
@@ -24,7 +24,7 @@ n_head = 4
 n_layer = 6
 
 def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encoder_path, pretrain_decoder_path, train_encoder_path=None, train_decoder_path=None, train=False):
-    pos = PositionalEncoding(n_embd)
+    pos = PositionalEmbedding(n_embd)
     encoder = TransformerEncoder(vocab_size=vocab_size,
                                 n_embd=n_embd,
                                 n_head=n_head,
@@ -41,9 +41,10 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     
     if train:
         encoder_path = train_encoder_path
+        print(encoder_path)
         decoder_path = train_decoder_path
-        encoder.load_state_dict(torch.load(pretrain_encoder_path))
-        decoder.load_state_dict(torch.load(pretrain_decoder_path))
+        encoder.load_state_dict(torch.load(pretrain_encoder_path, weights_only=True))
+        decoder.load_state_dict(torch.load(pretrain_decoder_path, weights_only=True))
     else: 
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
@@ -110,7 +111,12 @@ train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/tra
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model")
 
 # Pretrain model
-#run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader, val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path, pretrain_decoder_path=pretrain_decoder_path, train=False)
+run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
+          val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
+          pretrain_decoder_path=pretrain_decoder_path, train=False)
 
 # Train model
-run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader, val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path, pretrain_decoder_path=pretrain_decoder_path, train=True)
+run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader,
+          val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path,
+          pretrain_decoder_path=pretrain_decoder_path, train_encoder_path=train_encoder_path,
+          train_decoder_path=train_decoder_path, train=True)
