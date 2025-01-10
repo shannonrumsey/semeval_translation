@@ -6,18 +6,31 @@ from torch import optim
 from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
 import sys
 
+
+
+"""
+entity_info should be batches of entities, corresponding to the input data
+"""
 vocab_size = len(pretrain_dataset.vocab)
 # in order to set the proper size for max seq length for our positional embeddings
-def find_max_sequence_length(dataset):
+def find_max_sequence_length(dataset=None, entity_info=None):
+    if entity_info:
+        longest_entity = max(len(row) for batch in entity_info for row in batch)
+        return longest_entity
+    else:
+        for ids in dataset.corpus_encoder_ids:
+            print(len(ids))
+        encoder_max = max(len(ids) for ids in dataset.corpus_encoder_ids)
+        decoder_max = max(len(ids) for ids in dataset.corpus_decoder_ids)
+        target_max = max(len(ids) for ids in dataset.corpus_target_ids)
+        return max(encoder_max, decoder_max, target_max)
 
-    encoder_max = max(len(ids) for ids in dataset.corpus_encoder_ids)
-    decoder_max = max(len(ids) for ids in dataset.corpus_decoder_ids)
-    target_max = max(len(ids) for ids in dataset.corpus_target_ids)
-    return max(encoder_max, decoder_max, target_max)
-
-max_seq_len_pretrain = find_max_sequence_length(pretrain_dataset)
-max_seq_len_train = find_max_sequence_length(semeval_dataset)
+max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
+max_seq_len_train = find_max_sequence_length(dataset=semeval_dataset)
 max_seq_len = max(max_seq_len_pretrain, max_seq_len_train)
+
+# Uncomment once named entities are isolated and created
+# max_entity_len = find_max_sequence_length(entity_info=entity_info)
 
 n_embd = 128
 n_head = 4
@@ -29,11 +42,13 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 n_embd=n_embd,
                                 n_head=n_head,
                                 n_layer=n_layer,
-                                max_seq_len= max_seq_len).to(device)
+                                max_seq_len=max_seq_len,
+                                max_entity_len=max_entity_len).to(device)
     decoder = TransformerDecoder(max_seq_length=max_seq_len,
                                 n_embd=n_embd,
                                 n_head=n_head,
-                                vocab_size=vocab_size).to(device)
+                                vocab_size=vocab_size,
+                                max_entity_len=max_entity_len).to(device)
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
@@ -41,7 +56,6 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     
     if train:
         encoder_path = train_encoder_path
-        print(encoder_path)
         decoder_path = train_decoder_path
         encoder.load_state_dict(torch.load(pretrain_encoder_path, weights_only=True))
         decoder.load_state_dict(torch.load(pretrain_decoder_path, weights_only=True))

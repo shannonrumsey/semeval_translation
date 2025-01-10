@@ -293,7 +293,7 @@ def get_semeval_train():
 
                     df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
 
-                    sp = spm.SentencePieceProcessor(model_file="tokenizer_combined.model")
+                    sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
                     df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
                     df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 

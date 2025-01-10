@@ -142,7 +142,6 @@ class DecoderLayers(nn.Module):
         pad_mask = (x == pretrain_dataset.vocab["<PAD>"])
         pad_mask = pad_mask.any(dim=-1)
 
-
         attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
 
         if entity_info is not None:  # REMOVE extra entity info once its been used in attention
@@ -171,16 +170,14 @@ class CrossAttentionBlock(nn.Module):
         self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.GELU(), nn.Dropout(0.3),
                                               nn.Linear(4 * n_embd, n_embd))
     
-    def forward(self, decoder_input, encoder_output, entity_info=None):
+    def forward(self, decoder_input, encoder_output, entity_embeddings=None):
             # concatenate entity_info to the encoder inputs if provided
-            if entity_info is not None:
-                encoder_output_with_entity = torch.cat((entity_info, encoder_output), dim=1)
-                len_entity = entity_info.shape[1]
+            if entity_embeddings is not None:
+                encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
+                len_entity = entity_embeddings.shape[1]
             else:
                 encoder_output_with_entity = encoder_output
                 len_entity = 0
-
-
 
             # Padding mask
             pad_mask = (encoder_output_with_entity == pretrain_dataset.vocab["<PAD>"])

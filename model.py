@@ -13,18 +13,18 @@ elif torch.backends.mps.is_available():
 else:
     device = torch.device("cpu")
 
+
 class EntityEmbedding(nn.Module):
     """
     Takes in encoded entity tokens and returns entity embeddings
     Entity_tok (Tensor): BPE encoded entities
         e.g. ["Be", "yon", "ce"]
-    
     Notes:
         - Assumes that the entities line up with the model inputs
     """
-    def __init__(self, n_embd, entity_len=5000):
+    def __init__(self, n_embd, max_entity_len=5000):
         super().__init__()
-        self.entity_embedding = nn.Embedding(entity_len, n_embd)
+        self.entity_embedding = nn.Embedding(max_entity_len, n_embd)
 
     def forward(self, entity_tok):
         embedding = self.entity_embedding(entity_tok)
@@ -50,22 +50,21 @@ class TransformerEncoder(nn.Module):
     """
     No masking for self-attention
     """
-    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len):
+    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len, max_entity_len):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)
         self.pos_embedding = PositionalEmbedding(n_embd, max_seq_len)
+        self.entity_embeddings = EntityEmbedding(n_embd, max_entity_len)
 
         self.attention_layers = nn.ModuleList(
             [CrossAttentionBlock(n_embd, n_head) for _ in range(n_layer)]
         )
 
-
-
     def forward(self, x, entity_info=None):
         """
         Args:
             x (batch size, seq_len): Input sentences
-            entity_info (entity_seq_len, embedding dim): Entity embeddings
+            entity_info (batch size, entity len): Encoded entity embeddings
         Returns:
             Hidden states from Encoder
         Notes: 
@@ -74,15 +73,16 @@ class TransformerEncoder(nn.Module):
         """
         x = self.embedding(x)
         x = self.pos_embedding(x)
+        entity_embeddings = self.entity_embeddings(entity_info) if entity_info else None
         
         # Mimics PyTorch's TransformerEncoder
         for attention_layer in self.attention_layers: 
             # if entity info is provided, it will do cross attention using x + entity info as the keys and values and x as the query
             # if no info is provided, it will just do normal self attention
-            x = attention_layer(x, x, entity_info = None)
-
+            x = attention_layer(x, x, entity_embeddings=None)
 
         return x
+
 
 class TransformerDecoder(nn.Module):
     """
@@ -136,7 +136,3 @@ class TransformerDecoder(nn.Module):
         output = self.last_linear_layer(x)  # (batch_size, seq_len, vocab_size)
 
         return output
-
-        
-
-
