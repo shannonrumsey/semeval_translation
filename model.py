@@ -50,11 +50,11 @@ class TransformerEncoder(nn.Module):
     """
     No masking for self-attention
     """
-    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len, max_entity_len):
+    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len, entity_len):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)
         self.pos_embedding = PositionalEmbedding(n_embd, max_seq_len)
-        self.entity_embeddings = EntityEmbedding(n_embd, max_entity_len)
+        self.entity_embeddings = EntityEmbedding(n_embd, entity_len)
 
         self.attention_layers = nn.ModuleList(
             [CrossAttentionBlock(n_embd, n_head) for _ in range(n_layer)]
@@ -88,12 +88,13 @@ class TransformerDecoder(nn.Module):
     """
     Requires masking for self-attention
     """
-    def __init__(self, max_seq_length, n_embd, n_head, vocab_size, attention_layers=5):
+    def __init__(self, max_seq_length, n_embd, n_head, vocab_size, entity_len, attention_layers=5):
         super().__init__()
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
         self.position_embedding_table = nn.Embedding(max_seq_length,
                                                      n_embd)
         self.last_linear_layer = nn.Linear(n_embd, vocab_size)
+        self.entity_embeddings = EntityEmbedding(n_embd, entity_len)
 
         self.self_attention_layers = nn.ModuleList(
             [DecoderLayers(n_embd, n_head) for _ in range(attention_layers)]
@@ -102,7 +103,7 @@ class TransformerDecoder(nn.Module):
             [CrossAttentionBlock(n_embd, n_head) for _ in range(attention_layers)]
         )
 
-    def forward(self, decoder_input, encoder_output, entity_info = None):
+    def forward(self, decoder_input, encoder_output, entity_info=None):
         """
         Uses cross-attention and self-attention
         Args:
@@ -124,13 +125,15 @@ class TransformerDecoder(nn.Module):
         
         x = token_embeddings + position_embeddings  # adding token and position embeddings
 
+        entity_embeddings = self.entity_embeddings(entity_info) if entity_info else None
+
         # pass through self-attention layers
         for self_attn_block in self.self_attention_layers:
-            x = self_attn_block(x, entity_info)
+            x = self_attn_block(x, entity_embeddings)
 
         # pass through cross-attention layers
         for cross_attn_block in self.cross_attention_layers:
-            x = cross_attn_block(x, encoder_output, entity_info)
+            x = cross_attn_block(x, encoder_output, entity_embeddings)
 
         # final linear layer to map to vocab size
         output = self.last_linear_layer(x)  # (batch_size, seq_len, vocab_size)

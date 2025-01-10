@@ -303,6 +303,9 @@ def get_semeval_train():
 
 # Chunking not done on training data b/c source and translation must line up
 def collate_fn(batch):
+
+    ### NOTE: NEED TO INCLUDE ENTITY EMBEDDINGS
+    
     encoder_input = [item[0] for item in batch]
     decoder_input = [item[1] for item in batch]
     decoder_output = [item[2] for item in batch]
@@ -339,5 +342,4 @@ semeval_val_loader = DataLoader(semeval_val, batch_size=64, shuffle=True, collat
 semeval_test_loader = DataLoader(semeval_test, batch_size=64, shuffle=True, collate_fn=collate_fn)
 # print("🔎😮‍💨 analyzing train dataset ")
 # semeval_dataset.make_sure_everythings_alligned_properly()
-
 

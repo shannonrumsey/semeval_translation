@@ -30,7 +30,7 @@ max_seq_len_train = find_max_sequence_length(dataset=semeval_dataset)
 max_seq_len = max(max_seq_len_pretrain, max_seq_len_train)
 
 # Uncomment once named entities are isolated and created
-# max_entity_len = find_max_sequence_length(entity_info=entity_info)
+# entity_len = find_max_sequence_length(entity_info=entity_info)
 
 n_embd = 128
 n_head = 4
@@ -43,12 +43,12 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 n_head=n_head,
                                 n_layer=n_layer,
                                 max_seq_len=max_seq_len,
-                                max_entity_len=max_entity_len).to(device)
+                                max_entity_len=entity_len).to(device)
     decoder = TransformerDecoder(max_seq_length=max_seq_len,
                                 n_embd=n_embd,
                                 n_head=n_head,
                                 vocab_size=vocab_size,
-                                max_entity_len=max_entity_len).to(device)
+                                max_entity_len=entity_len).to(device)
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)

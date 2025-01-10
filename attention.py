@@ -25,7 +25,7 @@ All attention functions allow the user to pass in additional entity info. This i
                 (batch_size, seq_len, embedding_dim).
                 Padded and encoded input sentences:
                 ex "Who directed Up"
-            entity info = (batch_size, entity_len, embedding_dim)
+            entity embeddings = (batch_size, entity_len, embedding_dim)
                 Padded and encoded entity translations/ info
                 ex. <Oben> (where oben in the german translation)
 
@@ -51,7 +51,7 @@ class EncoderLayers(nn.Module):
             n_embd: The embedding dimension
             n_head: The number of attention heads
             x: Encoder input sentence
-            entity_info (Optional): Entity embeddings
+            entity_embeddings (Optional): Entity embeddings
 
         Function preforms unmasked self attention, complete with a feedforward layer, layer normalization, and residual connections
         Function gives option to include entity embeddings for experimentation
@@ -68,17 +68,17 @@ class EncoderLayers(nn.Module):
                                                 nn.Linear(4 * n_embd, n_embd))
 
     # gets self attention for self. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
-    def forward(self, x, entity_info=None):
-        if entity_info is not None:
-            x_with_entity = torch.cat((x, entity_info), dim=1)
-            len_entity = entity_info.shape[1]
+    def forward(self, x, entity_embeddings=None):
+        if entity_embeddings is not None:
+            x_with_entity = torch.cat((x, entity_embeddings), dim=1)
+            len_entity = entity_embeddings.shape[1]
         else:
             x_with_entity = x  # use normal x if no entity info is added
             len_entity = 0
 
         attn_output, _ = self.EncoderAttention(x_with_entity, x_with_entity, x_with_entity)
 
-        if entity_info is not None:  # REMOVE extra entity info once its been used in attention
+        if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,:]  # this will return our vector to (batch size, seq len, embedding dim)
 
         x = self.Enorm1(x + attn_output) # resid connection and
@@ -114,11 +114,11 @@ class DecoderLayers(nn.Module):
 
     # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
     # creates mask inside function
-    def forward(self, x, entity_info=None):
-        if entity_info is not None:
+    def forward(self, x, entity_embeddings=None):
+        if entity_embeddings is not None:
             # Decoder entity info would need to be added to the beginning or else it would be masked out
-            x_with_entity = torch.cat((entity_info, x), dim=1) 
-            len_entity = entity_info.shape[1]
+            x_with_entity = torch.cat((entity_embeddings, x), dim=1) 
+            len_entity = entity_embeddings.shape[1]
         else:
             x_with_entity = x
             len_entity = 0
@@ -144,7 +144,7 @@ class DecoderLayers(nn.Module):
 
         attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
 
-        if entity_info is not None:  # REMOVE extra entity info once its been used in attention
+        if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,
                           :]  # this will return our vector to (batch size, seq len, embedding dim)
 
@@ -174,10 +174,8 @@ class CrossAttentionBlock(nn.Module):
             # concatenate entity_info to the encoder inputs if provided
             if entity_embeddings is not None:
                 encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
-                len_entity = entity_embeddings.shape[1]
             else:
                 encoder_output_with_entity = encoder_output
-                len_entity = 0
 
             # Padding mask
             pad_mask = (encoder_output_with_entity == pretrain_dataset.vocab["<PAD>"])
