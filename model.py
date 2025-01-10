@@ -22,9 +22,9 @@ class EntityEmbedding(nn.Module):
     Notes:
         - Assumes that the entities line up with the model inputs
     """
-    def __init__(self, n_embd, max_entity_len=5000):
+    def __init__(self, n_embd, entity_len=5000):
         super().__init__()
-        self.entity_embedding = nn.Embedding(max_entity_len, n_embd)
+        self.entity_embedding = nn.Embedding(entity_len, n_embd)
 
     def forward(self, entity_tok):
         embedding = self.entity_embedding(entity_tok)
