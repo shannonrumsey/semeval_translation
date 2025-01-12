@@ -28,11 +28,12 @@ class TranslationDataset(Dataset):
         self.corpus_target_ids = []
         self.corpus_y_mask = [] # this will be a dummy variable (all 1s, indicating no padding)
 
-    def make_vocab(self, pretrain_data, train_data): 
+    def make_vocab(self, pretrain_data, train_data, entity_data):
         """
         Args:
             - pretrain_data (DataFrame): contains encoder input, decoder input, and decoder output (expected output).
             - train_data (list of DataFrames): each DataFrame is associated with a language.
+            - entity_data (DataFrame containing entity information with single column "entity")
         Note:
             - Both pretrain and train data will be used in the BPE vocabulary.
             - train_data is a list of DataFrames because a combined one is too large for Github.
@@ -101,6 +102,11 @@ class TranslationDataset(Dataset):
                 for token in row:
                     if token not in self.vocab:
                         self.vocab[token] = len(self.vocab)
+
+        for row in entity_data["entity"]:
+            ## needs to be filled in 
+
+
 
         self.inverse_vocab = {index: token for token, index in self.vocab.items()}
 
