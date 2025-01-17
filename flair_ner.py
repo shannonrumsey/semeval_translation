@@ -75,4 +75,5 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
     if verbose:
         print(f"Time taken: {end_time - start_time} seconds")
 
-ner_predictor('ar', 'train.jsonl', 'predictions_new.csv', verbose=True)
+# example usage
+# ner_predictor('ar', 'train.jsonl', 'predictions_new.csv', verbose=True)
