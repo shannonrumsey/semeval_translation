@@ -21,7 +21,7 @@ class TranslationDataset(Dataset):
         if vocab != None:
             self.vocab = vocab
         else:
-            self.vocab = {"<PAD>": 0, "-->": 1, "<unk>": 2, "[ent_info]": 3, "->": 4}  # special symbols which may not be in the data but need to be included
+            self.vocab = {"<PAD>": 0, "<unk>": 1, "[ent_info]": 2, "->": 3}  # special symbols which may not be in the data but need to be included
 
         self.inverse_vocab = None
         self.corpus_encoder_ids = []
@@ -437,14 +437,18 @@ def get_entity_info(just_get_lines = False, train=True):
     else:
         return entity_info
 
-def make_dummy_entity_data():
+def make_dummy_entity_data(train=True):
     """
     Creates dummy CSV files with the specified number of rows for each file.
 
     """
 
     languages = ["ar", "de", "es", "fr", "it", "ja"]
-    base_dir = "data/entity_info"
+    if train:
+        base_dir = "data/entity_info/train"
+    else:
+        base_dir = "data/entity_info/val"
+
 
     lines = get_semeval_train(just_get_lines=True)  # the number of lines that should be in each df in a list
 
@@ -464,7 +468,6 @@ def make_dummy_entity_data():
         df.to_csv(csv_path, index=False, encoding="utf-8")
         print(f"Created file: {csv_path} with {num_rows} rows.")
 
-make_dummy_entity_data()
 
 # Chunking not done on training data b/c source and translation must line up
 def collate_fn(batch):
@@ -473,6 +476,7 @@ def collate_fn(batch):
     decoder_input = [item[1] for item in batch]
     decoder_output = [item[2] for item in batch]
     mask = [item[3] for item in batch]
+    print(batch.size)
 
     # set batch_first to True to make the batch size first dim
     padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
@@ -493,6 +497,9 @@ def entity_fn(batch):
 
 
 # Encode and load pretrain data
+make_dummy_entity_data()
+make_dummy_entity_data(train=False)
+
 print("running pretrain")
 semeval_train = get_semeval_train()
 pretrain_dataset = TranslationDataset()
@@ -508,19 +515,22 @@ pretrain_val_loader = DataLoader(pretrain_val, batch_size=64, shuffle=True, coll
 # Encode and load train data
 print("running train")
 semeval_val = get_semeval_val()
+entities_train = get_entity_info()
+entities_val = get_entity_info(train=False)
+
+
 semeval_dataset = TranslationDataset()
 semeval_val_dataset = TranslationDataset()
-semeval_dataset.make_vocab(pretrain_list, semeval_train)
+semeval_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 
 semeval_dataset.encode_semeval(semeval_train)
 semeval_val_dataset.encode_semeval(semeval_val)
-semeval_val_dataset.make_vocab(pretrain_list, semeval_train)
+semeval_val_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 
 semeval_train_loader = DataLoader(semeval_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val, batch_size=64, shuffle=True, collate_fn=collate_fn)
 
-entities_train = get_entity_info()
-entities_val = get_entity_info(train=False)
+
 entity_train_info = DataLoader(entities_train, batch_size=64, shuffle=True, collate_fn=entity_fn)
 entity_val_info = DataLoader(entities_val, batch_size=64, shuffle=True, collate_fn=entity_fn)
 
