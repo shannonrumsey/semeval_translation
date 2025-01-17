@@ -1,4 +1,4 @@
-from dataset import pretrain_dataset, semeval_dataset, pretrain_train_loader, pretrain_val_loader, semeval_train_loader, semeval_val_loader, semeval_test_loader
+from dataset import pretrain_dataset, semeval_dataset, pretrain_train_loader, pretrain_val_loader, semeval_train_loader, semeval_val_loader, entity_train_info, entity_val_info
 import os
 import torch
 from torch import nn
@@ -28,9 +28,7 @@ def find_max_sequence_length(dataset=None, entity_info=None):
 max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
 max_seq_len_train = find_max_sequence_length(dataset=semeval_dataset)
 max_seq_len = max(max_seq_len_pretrain, max_seq_len_train)
-
-# Uncomment once named entities are isolated and created
-# entity_len = find_max_sequence_length(entity_info=entity_info)
+entity_len = find_max_sequence_length(entity_info=entity_info)
 
 n_embd = 128
 n_head = 4
