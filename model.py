@@ -149,7 +149,8 @@ class TransformerDecoder(nn.Module):
             better results
         """
         seq_len = decoder_input.size(1)
-        entity_len = entity_info.size(1)
+        if entity_info:
+            entity_len = entity_info.size(1)
 
         # embedd the decoder input 
         token_embeddings = self.token_embedding_table(decoder_input)  # batch, seq len, embedding size
@@ -167,9 +168,12 @@ class TransformerDecoder(nn.Module):
 
             entity_embeddings = entity_token_embeddings + entity_position_embeddings  # adding token and position embeddings
 
-        if encoder_entity_embeddings != None and use_encoders_entities is True:
+        elif encoder_entity_embeddings != None and use_encoders_entities is True:
             # if use_encoders_entities is True, then we use the same entities as the encoder
             entity_embeddings = encoder_entity_embeddings
+            
+        else:
+            entity_embeddings = None 
 
         # pass through self-attention layers
         for self_attn_block in self.self_attention_layers:

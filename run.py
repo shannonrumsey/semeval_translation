@@ -1,4 +1,4 @@
-from dataset import pretrain_dataset, semeval_dataset, pretrain_train_loader, pretrain_val_loader, semeval_train_loader, semeval_val_loader, entity_train_info, entity_val_info
+from dataset import pretrain_dataset, semeval_train_dataset, semeval_val_dataset, pretrain_train_loader, pretrain_val_loader, semeval_train_loader, semeval_val_loader
 import os
 import torch
 from torch import nn
@@ -13,9 +13,11 @@ entity_info should be batches of entities, corresponding to the input data
 """
 vocab_size = len(pretrain_dataset.vocab)
 # in order to set the proper size for max seq length for our positional embeddings
-def find_max_sequence_length(dataset=None, entity_info=None):
-    if entity_info:
-        longest_entity = max(len(row) for batch in entity_info for row in batch)
+def find_max_sequence_length(dataset, entity= False): # if entity == True, it will return the max entitry length
+    if entity:
+        if dataset.entity_ids != None:
+
+            longest_entity = max(len(ids) for ids in dataset.entity_ids)
         return longest_entity
     else:
         for ids in dataset.corpus_encoder_ids:
@@ -26,9 +28,13 @@ def find_max_sequence_length(dataset=None, entity_info=None):
         return max(encoder_max, decoder_max, target_max)
 
 max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
-max_seq_len_train = find_max_sequence_length(dataset=semeval_dataset)
-max_seq_len = max(max_seq_len_pretrain, max_seq_len_train)
-entity_len = find_max_sequence_length(entity_info=entity_info)
+max_seq_len_train = find_max_sequence_length(dataset=semeval_train_dataset)
+max_seq_len_val = find_max_sequence_length(dataset=semeval_val_dataset)
+max_seq_len = max(max_seq_len_pretrain, max_seq_len_train, max_seq_len_val)
+entity_len_train = find_max_sequence_length(dataset=semeval_train_dataset, entity = True)
+entity_len_val = find_max_sequence_length(dataset=semeval_val_dataset, entity = True)
+
+entity_len = max(entity_len_train, entity_len_val)
 
 n_embd = 128
 n_head = 4
@@ -41,12 +47,12 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 n_head=n_head,
                                 n_layer=n_layer,
                                 max_seq_len=max_seq_len,
-                                entity_len=entity_len).to(device)
+                                max_entity_len=entity_len).to(device)
     decoder = TransformerDecoder(max_seq_length=max_seq_len,
+                                max_entity_length= entity_len,
                                 n_embd=n_embd,
                                 n_head=n_head,
-                                vocab_size=vocab_size,
-                                entity_len=entity_len).to(device)
+                                vocab_size=vocab_size).to(device)
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
@@ -67,17 +73,30 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         epoch_loss = 0
         encoder.train()
         decoder.train()
-        for encoder_input, decoder_input, target, mask in train_loader:
+        print(len(train_loader))
+        for batch in train_loader:
+            if len(batch) == 4: # we don;t have any entity info
+                encoder_input, decoder_input, target, mask = batch
+                entity_info = None
+
+            elif len(batch) == 5: # we have entity info
+                encoder_input, decoder_input, target, mask, entity_info = batch
+            print("entity info = ", entity_info)
             encoder_input = encoder_input.to(device)
             decoder_input = decoder_input.to(device)
             target = target.to(device)
             mask = mask.to(device)
+            if entity_info:
+                entity_info = entity_info.to(device)
 
             enc_optimizer.zero_grad()
             dec_optimizer.zero_grad()
 
-            hidden_states = encoder(encoder_input)
-            decoder_outputs = decoder(decoder_input, hidden_states)
+            hidden_states, encoder_entities = encoder(encoder_input, entity_info)
+            decoder_outputs = decoder(decoder_input, hidden_states, encoder_entities, use_encoders_entities = True) # NOTE: the encoder returns the embeddings it used for entities
+            # The decoder CAN use these embeddings by taking it in as a parameter, but it doesnt have to. If the encoder entity embeddings are not provided,
+            # it will make its own entity embeddings
+            # in this code, I am telling decoder to use the encoder entity embedings, but we can change this later when experimenting
 
             loss = loss_fn(decoder_outputs.view(-1, vocab_size), target.view(-1))
 

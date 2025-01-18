@@ -249,7 +249,7 @@ class TranslationDataset(Dataset):
                 source = df["source"]
                 target = df["target"]
 
-                for s, t in zip(source, target):
+                for s, t in zip(source, target): # Note: this will only be the entity data, (source and target translations for just the entity)
                     s_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in s]
                     t_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in t]
 
@@ -439,17 +439,20 @@ def make_dummy_entity_data(train=True):
 
     """
 
-    languages = ["ar", "de", "es", "fr", "it", "ja"]
+
+
     if train:
         base_dir = "data/entity_info/train"
+        lines = get_semeval_train(just_get_lines=True)  # the number of lines that should be in each df in a list
+        languages = ["ar", "de", "es", "fr", "it", "ja"]
     else:
         base_dir = "data/entity_info/val"
+        lines = get_semeval_val(just_get_lines=True)  # the number of lines that should be in each df in a list
+        print("lines for val: ", lines)
+        languages = ["ar", "de", "es", "fr", "it", "ja", "ko", "th", "tr", "zh"]
 
 
-    lines = get_semeval_train(just_get_lines=True)  # the number of lines that should be in each df in a list
 
-    if len(lines) != len(languages):
-        raise ValueError("The number of rows must match the number of language files.")
 
     os.makedirs(base_dir, exist_ok=True)
 
