@@ -202,7 +202,7 @@ class TranslationDataset(Dataset):
         self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
         self.corpus_y_mask)
 
-    def encode_semeval(self, data, entity_data = None): # for training, val, amd test semeval data
+    def encode_semeval(self, data, entity_data=None): # for training, val, amd test semeval data
         """
         Args:
             data (list of DataFrames): Similar to the encode_pretrain inputs where the SemEval data is split up into a list of DataFrames
@@ -254,7 +254,6 @@ class TranslationDataset(Dataset):
                     t_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in t]
 
                     new_sentence = [self.vocab["[ent_info]"]] + s_tokens + [self.vocab["->"]] + t_tokens
-                    print(new_sentence)
                     self.entity_ids.append(torch.tensor(new_sentence))
 
         # Shuffle data from all languages
@@ -347,7 +346,6 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
     # code adapted from pretrain.py with minor modifications
     # expected format: train -> [ar -> train.jsonl, de -> train.jsonl...]
     for folder_name in os.listdir(base_dir):
-        print(folder_name) # so we can check that both are being processed in the same order
         folder_path = os.path.join(base_dir, folder_name)
 
         # check if the path is a language folder
@@ -418,15 +416,13 @@ def get_entity_info(just_get_lines = False, train=True):
     sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
 
     for df_name in os.listdir(base_dir):
-        print(df_name) # so we can check that both are being processed in the same order
         csv_file_path = os.path.join(base_dir, df_name)
 
         if os.path.isfile(csv_file_path) and csv_file_path.endswith(".csv"):
             df = pd.read_csv(csv_file_path)
             num_rows.append(df.shape[0])
 
-
-            if "source" in df.columns and "target" in df.columns:
+            if "target" in df.columns:
 
                 df["source"] = df["source"].apply(lambda text: sp.encode(str(text), out_type=str))
                 df["target"] = df["target"].apply(lambda text: sp.encode(str(text), out_type=str))
@@ -455,7 +451,6 @@ def make_dummy_entity_data(train=True):
     if len(lines) != len(languages):
         raise ValueError("The number of rows must match the number of language files.")
 
-
     os.makedirs(base_dir, exist_ok=True)
 
     for lang, num_rows in zip(languages, lines):
@@ -471,37 +466,37 @@ def make_dummy_entity_data(train=True):
 
 # Chunking not done on training data b/c source and translation must line up
 def collate_fn(batch):
-    
+    entities = None
+    if all(len(item) == 5 for item in batch):
+        entities = [item[4] for item in batch]
+
     encoder_input = [item[0] for item in batch]
     decoder_input = [item[1] for item in batch]
     decoder_output = [item[2] for item in batch]
     mask = [item[3] for item in batch]
-    print(batch.size)
 
     # set batch_first to True to make the batch size first dim
-    padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
-    padded_de_in = pad_sequence(decoder_input, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])
-    padded_de_out = pad_sequence(decoder_output, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])
-    padded_mask = pad_sequence(mask, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])
-    return padded_en_in, padded_de_in, padded_de_out, padded_mask
-
-
-# Exact same logic as the collate_fn, except for entity info!
-def entity_fn(batch):
-    source = [item[0] for item in batch]
-    target = [item[1] for item in batch]
-
-    padded_source = pad_sequence(source, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])
-    padded_target = pad_sequence(target, batch_first=True, padding_value=semeval_dataset.vocab["<PAD>"])
-    return padded_source, padded_target
+    padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
+    padded_de_in = pad_sequence(decoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
+    padded_de_out = pad_sequence(decoder_output, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
+    padded_mask = pad_sequence(mask, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
+    if entities is not None:
+        padded_entities = pad_sequence(entities, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
+        return padded_en_in, padded_de_in, padded_de_out, padded_mask, padded_entities
+    else:
+        return padded_en_in, padded_de_in, padded_de_out, padded_mask
 
 
 # Encode and load pretrain data
 make_dummy_entity_data()
 make_dummy_entity_data(train=False)
+semeval_train = get_semeval_train()
+semeval_val = get_semeval_val()
+entities_train = get_entity_info()
+entities_val = get_entity_info(train=False)
 
 print("running pretrain")
-semeval_train = get_semeval_train()
+
 pretrain_dataset = TranslationDataset()
 pretrain_dataset.make_vocab(pretrain_list, semeval_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
@@ -514,25 +509,18 @@ pretrain_val_loader = DataLoader(pretrain_val, batch_size=64, shuffle=True, coll
 
 # Encode and load train data
 print("running train")
-semeval_val = get_semeval_val()
-entities_train = get_entity_info()
-entities_val = get_entity_info(train=False)
 
 
-semeval_dataset = TranslationDataset()
+semeval_train_dataset = TranslationDataset()
 semeval_val_dataset = TranslationDataset()
-semeval_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
+semeval_train_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 
-semeval_dataset.encode_semeval(semeval_train)
-semeval_val_dataset.encode_semeval(semeval_val)
+semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train)
+semeval_val_dataset.encode_semeval(semeval_val, entity_data=entities_val)
 semeval_val_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
+semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 
-semeval_train_loader = DataLoader(semeval_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
-semeval_val_loader = DataLoader(semeval_val, batch_size=64, shuffle=True, collate_fn=collate_fn)
-
-
-entity_train_info = DataLoader(entities_train, batch_size=64, shuffle=True, collate_fn=entity_fn)
-entity_val_info = DataLoader(entities_val, batch_size=64, shuffle=True, collate_fn=entity_fn)
 
 # # just some code for testing
 # print("running test")
