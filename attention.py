@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import sys
-from dataset import pretrain_dataset
+from dataset import semeval_train_dataset
 
 seed = 27
 torch.manual_seed(seed)
@@ -115,6 +115,7 @@ class DecoderLayers(nn.Module):
     # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
     # creates mask inside function
     def forward(self, x, entity_embeddings=None):
+        
         if entity_embeddings is not None:
             # Decoder entity info would need to be added to the beginning or else it would be masked out
             x_with_entity = torch.cat((entity_embeddings, x), dim=1) 
@@ -138,11 +139,8 @@ class DecoderLayers(nn.Module):
         # Attention mask
         mask = torch.triu(torch.ones(x.shape[1] + len_entity, x.shape[1] + len_entity, device=device), diagonal= len_entity +1).bool()
 
-        # Padding mask (pretrain_dataset and semeval_dataset should have same vocab)
-        pad_mask = (x == pretrain_dataset.vocab["<PAD>"])
-        pad_mask = pad_mask.any(dim=-1)
 
-        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
+        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask)
 
         if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,
@@ -170,17 +168,12 @@ class CrossAttentionBlock(nn.Module):
         self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.GELU(), nn.Dropout(0.3),
                                               nn.Linear(4 * n_embd, n_embd))
     
-    def forward(self, decoder_input, encoder_output, entity_embeddings=None):
+    def forward(self, decoder_input, encoder_output, pad_mask, entity_embeddings=None):
             # concatenate entity_info to the encoder inputs if provided
             if entity_embeddings is not None:
                 encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
             else:
                 encoder_output_with_entity = encoder_output
-
-            # Padding mask
-            pad_mask = (encoder_output_with_entity == pretrain_dataset.vocab["<PAD>"])
-            print(pad_mask)
-            pad_mask = pad_mask.any(dim=-1)
 
             # get cross-attention (decoder query, encoder key & value)
             attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,

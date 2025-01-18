@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from attention import EncoderLayers, DecoderLayers, CrossAttentionBlock
+from dataset import semeval_train_dataset
 
 seed = 27
 torch.manual_seed(seed)
@@ -77,6 +78,11 @@ class TransformerEncoder(nn.Module):
             - This code implies that we will need to write a seperate function for generating embeddings for the entity information
             - Entity info should have shape (entity_seq_len, embedding dim)
         """
+        pad_mask = (x == semeval_train_dataset.vocab["<PAD>"])
+        print(x, semeval_train_dataset.vocab["<PAD>"])
+        print(pad_mask)
+        entity_pad_mask = (entity_info == semeval_train_dataset.vocab["<PAD>"])
+        print(entity_pad_mask)
         x = self.embedding(x)
         x = self.pos_embedding(x)  # pos_embedding takes in the semantic embedding and manually sums them
         # ^ this comment is for Darian because I keep forgetting this and rereading the code XD
@@ -88,7 +94,7 @@ class TransformerEncoder(nn.Module):
         for attention_layer in self.attention_layers:
             # if entity info is provided, it will do cross attention using x + entity info as the keys and values and x as the query
             # if no info is provided, it will just do normal self attention
-            x = attention_layer(x, x, entity_embeddings=entity_embeddings)
+            x = attention_layer(x, x, pad_mask=pad_mask, entity_embeddings=entity_embeddings)
 
         return x, entity_embeddings
 

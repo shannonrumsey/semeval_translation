@@ -439,8 +439,6 @@ def make_dummy_entity_data(train=True):
 
     """
 
-
-
     if train:
         base_dir = "data/entity_info/train"
         lines = get_semeval_train(just_get_lines=True)  # the number of lines that should be in each df in a list
@@ -470,13 +468,18 @@ def make_dummy_entity_data(train=True):
 # Chunking not done on training data b/c source and translation must line up
 def collate_fn(batch):
     entities = None
+
     if all(len(item) == 5 for item in batch):
         entities = [item[4] for item in batch]
-
+    print("lengths of this batch:")
     encoder_input = [item[0] for item in batch]
     decoder_input = [item[1] for item in batch]
     decoder_output = [item[2] for item in batch]
     mask = [item[3] for item in batch]
+    print(len(encoder_input))
+    print(len(decoder_input))
+    print(len(decoder_output))
+    print(len(mask))
 
     # set batch_first to True to make the batch size first dim
     padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
@@ -487,6 +490,7 @@ def collate_fn(batch):
         padded_entities = pad_sequence(entities, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
         return padded_en_in, padded_de_in, padded_de_out, padded_mask, padded_entities
     else:
+        print(padded_en_in, padded_de_in, padded_de_out, padded_mask)
         return padded_en_in, padded_de_in, padded_de_out, padded_mask
 
 
@@ -501,7 +505,7 @@ entities_val = get_entity_info(train=False)
 print("running pretrain")
 
 pretrain_dataset = TranslationDataset()
-pretrain_dataset.make_vocab(pretrain_list, semeval_train)
+pretrain_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 pretrain_dataset.encode_pretrain(pretrain_list)
 pretrain_train, pretrain_val = train_test_split(pretrain_dataset, test_size=0.1, random_state=27)
 # No padding in the pretrainig data

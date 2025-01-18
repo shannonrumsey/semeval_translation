@@ -6,8 +6,6 @@ from torch import optim
 from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
 import sys
 
-
-
 """
 entity_info should be batches of entities, corresponding to the input data
 """
@@ -73,7 +71,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         epoch_loss = 0
         encoder.train()
         decoder.train()
-        print(len(train_loader))
+
         for batch in train_loader:
             if len(batch) == 4: # we don;t have any entity info
                 encoder_input, decoder_input, target, mask = batch
