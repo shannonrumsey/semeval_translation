@@ -79,9 +79,9 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         for batch in train_loader:
 
             # for our mental health and sanity 
-            print(
-                "\n\nHey Darian & Shannon 👯‍️! 🌳 Çok güzel teamwork 🌻🌿 \nÇok harika ideas! 🌞✨ Tebrikler on how far you’ve come! 🎉👏 \nLet’s keep up the amazing iş 🌸, and show this proje who’s patron. 💪🌺 🌊🌍\n\n"
-            )
+            # print(
+            #     "\n\nHey Darian & Shannon 👯‍️! 🌳 Çok güzel teamwork 🌻🌿 \nÇok harika ideas! 🌞✨ Tebrikler on how far you’ve come! 🎉👏 \nLet’s keep up the amazing iş 🌸, and show this proje who’s patron. 💪🌺 🌊🌍\n\n"
+            # )
 
             if len(batch) == 4: # we don;t have any entity info
                 encoder_input, decoder_input, target, mask = batch
@@ -91,16 +91,16 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 encoder_input, decoder_input, target, mask, entity_info = batch
 
             encoder_input = encoder_input.to(device)
-            print("🥎len encoder input: ", encoder_input.shape)
+            # print("🥎len encoder input: ", encoder_input.shape)
 
-            print("🥎printing a sample for debugging ")
-            string = ""
-            for item in encoder_input[0]:
+            # print("🥎printing a sample for debugging ")
+            # string = ""
+            # for item in encoder_input[0]:
 
-                string += semeval_train_dataset.inverse_vocab[item.item()] + " "
-            print(string)
-            print("🥎")
-            print(" ")
+            #     string += semeval_train_dataset.inverse_vocab[item.item()] + " "
+            # print(string)
+            # print("🥎")
+            # print(" ")
             decoder_input = decoder_input.to(device)
             target = target.to(device)
             mask = mask.to(device)
@@ -127,7 +127,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         avg_pretrain_loss = epoch_loss / len(train_loader)
         print(f"Epoch Training Loss: {avg_pretrain_loss}")
 
-        '''val_loss = 0
+        val_loss = 0
         encoder.eval()
         decoder.eval()
         with torch.no_grad():
@@ -151,7 +151,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 print("LOWEST LOSS: SAVING MODEL")
                 torch.save(encoder.state_dict(), encoder_path)
                 torch.save(decoder.state_dict(), decoder_path)
-                prev_loss = total_val_loss'''
+                prev_loss = total_val_loss
 
         
 pretrain_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/pretrain_encoder_model")

@@ -78,11 +78,11 @@ class TransformerEncoder(nn.Module):
             - This code implies that we will need to write a seperate function for generating embeddings for the entity information
             - Entity info should have shape (entity_seq_len, embedding dim)
         """
-        pad_mask = (x == semeval_train_dataset.vocab["<PAD>"])
-        print(x, semeval_train_dataset.vocab["<PAD>"])
-        print(pad_mask)
-        entity_pad_mask = (entity_info == semeval_train_dataset.vocab["<PAD>"])
-        print(entity_pad_mask)
+        if entity_info:
+            pad_mask = (torch.cat((entity_info, x), dim=1) == semeval_train_dataset.vocab["<PAD>"])
+        else:
+            pad_mask = (x == semeval_train_dataset.vocab["<PAD>"])
+      
         x = self.embedding(x)
         x = self.pos_embedding(x)  # pos_embedding takes in the semantic embedding and manually sums them
         # ^ this comment is for Darian because I keep forgetting this and rereading the code XD
@@ -94,7 +94,7 @@ class TransformerEncoder(nn.Module):
         for attention_layer in self.attention_layers:
             # if entity info is provided, it will do cross attention using x + entity info as the keys and values and x as the query
             # if no info is provided, it will just do normal self attention
-            x = attention_layer(x, x, pad_mask=pad_mask, entity_embeddings=entity_embeddings)
+            x = attention_layer(x, x, pad_mask, entity_embeddings=entity_embeddings)
 
         return x, entity_embeddings
 
@@ -154,6 +154,13 @@ class TransformerDecoder(nn.Module):
             I think we should experiment with both approaches to see which yeilds
             better results
         """
+        
+        if entity_info:
+            pad_mask = (torch.cat((entity_info, decoder_input), dim=1) == semeval_train_dataset.vocab["<PAD>"])
+             
+        else:
+            pad_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"])
+
         seq_len = decoder_input.size(1)
         if entity_info:
             entity_len = entity_info.size(1)
@@ -183,11 +190,11 @@ class TransformerDecoder(nn.Module):
 
         # pass through self-attention layers
         for self_attn_block in self.self_attention_layers:
-            x = self_attn_block(x, entity_embeddings)
+            x = self_attn_block(x, pad_mask, entity_embeddings)
 
         # pass through cross-attention layers
         for cross_attn_block in self.cross_attention_layers:
-            x = cross_attn_block(x, encoder_output, entity_embeddings)
+            x = cross_attn_block(x, encoder_output, pad_mask, entity_embeddings)
 
         # final linear layer to map to vocab size
         output = self.last_linear_layer(x)  # (batch_size, seq_len, vocab_size)

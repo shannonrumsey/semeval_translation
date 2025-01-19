@@ -114,7 +114,7 @@ class DecoderLayers(nn.Module):
 
     # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
     # creates mask inside function
-    def forward(self, x, entity_embeddings=None):
+    def forward(self, x, pad_mask, entity_embeddings=None):
         
         if entity_embeddings is not None:
             # Decoder entity info would need to be added to the beginning or else it would be masked out
@@ -140,7 +140,7 @@ class DecoderLayers(nn.Module):
         mask = torch.triu(torch.ones(x.shape[1] + len_entity, x.shape[1] + len_entity, device=device), diagonal= len_entity +1).bool()
 
 
-        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask)
+        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
 
         if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,
@@ -175,7 +175,8 @@ class CrossAttentionBlock(nn.Module):
             else:
                 encoder_output_with_entity = encoder_output
 
-            # get cross-attention (decoder query, encoder key & value)
+            # get cross-attention 
+            # (decoder query, encoder key & value)
             attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,
                                                  encoder_output_with_entity, key_padding_mask=pad_mask)
             # output will be of size: (batch_size, seq_len_decoder, n_embd)

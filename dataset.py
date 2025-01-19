@@ -477,32 +477,29 @@ def collate_fn(batch):
     decoder_input = [item[1] for item in batch]
     decoder_output = [item[2] for item in batch]
     mask = [item[3] for item in batch]
-    print(len(encoder_input))
-    print(len(decoder_input))
-    print(len(decoder_output))
-    print(len(mask))
 
     # set batch_first to True to make the batch size first dim
     padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
     padded_de_in = pad_sequence(decoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_de_out = pad_sequence(decoder_output, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_mask = pad_sequence(mask, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
-    print("🌻🌻 testing random encoder id inside the collate function to make sure its behaving:")
-    if len(padded_en_in) >  5:
-        for en in padded_en_in[:5]:
-            test_string = ""
-            for item in en:
-                test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
-            print(test_string)
+    # print("🌻🌻 testing random encoder id inside the collate function to make sure its behaving:")
+    # if len(padded_en_in) >  5:
+    #     for en in padded_en_in[:5]:
+    #         test_string = ""
+    #         for item in en:
+    #             test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
+    #         print(test_string)
 
 
 
     if entities is not None:
         padded_entities = pad_sequence(entities, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
+        print(padded_en_in, padded_de_in, padded_de_out, padded_mask, padded_entities)
         return padded_en_in, padded_de_in, padded_de_out, padded_mask, padded_entities
+    
     else:
-        
-        
+        print(padded_en_in, padded_de_in, padded_de_out, padded_mask)
         return padded_en_in, padded_de_in, padded_de_out, padded_mask
 
 
@@ -541,12 +538,12 @@ semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 
 
-print("🟥🟥testing a random encoder id:")
-test_string = ""
-for item in semeval_train_dataset.corpus_encoder_ids[30]:
-    test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
-print(test_string)
-print("decoder len: ", len(semeval_train_dataset.corpus_decoder_ids))
+# print("🟥🟥testing a random encoder id:")
+# test_string = ""
+# for item in semeval_train_dataset.corpus_encoder_ids[30]:
+#     test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
+# print(test_string)
+# print("decoder len: ", len(semeval_train_dataset.corpus_decoder_ids))
 
 
 # # just some code for testing
