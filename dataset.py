@@ -158,6 +158,7 @@ class TranslationDataset(Dataset):
                         print(f"Error: The string could not be interpreted as a list: {row}")
                         continue
                 encoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in row]
+                self.corpus_encoder_ids.append(torch.tensor(encoder_ids))
 
             for row in df["decoder_input"]:
                 if isinstance(row, str):  # some of the lists were improperly encoded as strings
@@ -170,6 +171,7 @@ class TranslationDataset(Dataset):
                         print(f"Error: The string could not be interpreted as a list: {row}")
                         continue
                 decoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in row]
+                self.corpus_decoder_ids.append(torch.tensor(decoder_ids))
 
             for row in df["decoder_output"]:
                 if isinstance(row, str):  # some of the lists were improperly encoded as strings
@@ -182,14 +184,14 @@ class TranslationDataset(Dataset):
                         print(f"Error: The string could not be interpreted as a list: {row}")
                         continue
                 target_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in row]
+                self.corpus_target_ids.append(torch.tensor(target_ids))
 
-            self.corpus_encoder_ids.append(torch.tensor(encoder_ids))
-            self.corpus_decoder_ids.append(torch.tensor(decoder_ids))
-            self.corpus_target_ids.append(torch.tensor(target_ids))
-            dummy_mask = torch.ones(len(target_ids))
-            # we will need to have masks for the actual task to only take the loss on the translation part.
-            # For pretrain we will just use a dummy mask of all 1s so that we dont need to change the code greatly
-            self.corpus_y_mask.append(dummy_mask)
+
+
+                dummy_mask = torch.ones(len(target_ids))
+                # we will need to have masks for the actual task to only take the loss on the translation part.
+                # For pretrain we will just use a dummy mask of all 1s so that we dont need to change the code greatly
+                self.corpus_y_mask.append(dummy_mask)
 
         # paired data just allows us to shuffle the data from different languages without losing information
         paired_data = list(
@@ -236,11 +238,11 @@ class TranslationDataset(Dataset):
                 target_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in target]
 
         
-            self.corpus_encoder_ids.append(torch.tensor(encoder_ids))
-            self.corpus_decoder_ids.append(torch.tensor(decoder_ids))
-            self.corpus_target_ids.append(torch.tensor(target_ids))
-            dummy_mask = torch.ones(len(target_ids))
-            self.corpus_y_mask.append(dummy_mask)
+                self.corpus_encoder_ids.append(torch.tensor(encoder_ids))
+                self.corpus_decoder_ids.append(torch.tensor(decoder_ids))
+                self.corpus_target_ids.append(torch.tensor(target_ids))
+                dummy_mask = torch.ones(len(target_ids))
+                self.corpus_y_mask.append(dummy_mask)
 
         if entity_data:
             self.entity_ids = []
@@ -321,8 +323,7 @@ class TranslationDataset(Dataset):
 
     def __getitem__(self, idx):
         if self.entity_ids:
-            return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], \
-            self.corpus_y_mask[idx], self.entity_ids[idx]
+            return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], self.corpus_y_mask[idx], self.entity_ids[idx]
 
         else:
             return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], self.corpus_y_mask[idx]
@@ -486,17 +487,28 @@ def collate_fn(batch):
     padded_de_in = pad_sequence(decoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_de_out = pad_sequence(decoder_output, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_mask = pad_sequence(mask, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
+    print("🌻🌻 testing random encoder id inside the collate function to make sure its behaving:")
+    if len(padded_en_in) >  5:
+        for en in padded_en_in[:5]:
+            test_string = ""
+            for item in en:
+                test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
+            print(test_string)
+
+
+
     if entities is not None:
         padded_entities = pad_sequence(entities, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
         return padded_en_in, padded_de_in, padded_de_out, padded_mask, padded_entities
     else:
-        print(padded_en_in, padded_de_in, padded_de_out, padded_mask)
+        
+        
         return padded_en_in, padded_de_in, padded_de_out, padded_mask
 
 
 # Encode and load pretrain data
-make_dummy_entity_data()
-make_dummy_entity_data(train=False)
+#make_dummy_entity_data()
+#make_dummy_entity_data(train=False)
 semeval_train = get_semeval_train()
 semeval_val = get_semeval_val()
 entities_train = get_entity_info()
@@ -527,6 +539,14 @@ semeval_val_dataset.encode_semeval(semeval_val, entity_data=entities_val)
 semeval_val_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
+
+
+print("🟥🟥testing a random encoder id:")
+test_string = ""
+for item in semeval_train_dataset.corpus_encoder_ids[30]:
+    test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
+print(test_string)
+print("decoder len: ", len(semeval_train_dataset.corpus_decoder_ids))
 
 
 # # just some code for testing
