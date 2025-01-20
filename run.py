@@ -104,14 +104,16 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             decoder_input = decoder_input.to(device)
             target = target.to(device)
             mask = mask.to(device)
-            if entity_info:
+            if entity_info is not None:
                 entity_info = entity_info.to(device)
+            else:
+                entity_info = None
 
             enc_optimizer.zero_grad()
             dec_optimizer.zero_grad()
 
-            hidden_states, encoder_entities = encoder(encoder_input, entity_info)
-            decoder_outputs = decoder(decoder_input, hidden_states, encoder_entities, use_encoders_entities = True) # NOTE: the encoder returns the embeddings it used for entities
+            hidden_states, encoder_entities, encoder_inputs = encoder(encoder_input, entity_info=entity_info)
+            decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=entity_info) # NOTE: the encoder returns the embeddings it used for entities
             # The decoder CAN use these embeddings by taking it in as a parameter, but it doesnt have to. If the encoder entity embeddings are not provided,
             # it will make its own entity embeddings
             # in this code, I am telling decoder to use the encoder entity embedings, but we can change this later when experimenting
@@ -137,8 +139,13 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 target = target.to(device)
                 mask = mask.to(device)
 
-                hidden_states = encoder(encoder_input)
-                decoder_outputs = decoder(decoder_input, hidden_states)
+                if entity_info is not None:
+                    entity_info = entity_info.to(device)
+                else:
+                    entity_info = None
+
+                hidden_states, encoder_entities, encoder_inputs = encoder(encoder_input, entity_info=entity_info)
+                decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=entity_info)
 
                 loss = loss_fn(decoder_outputs.view(-1, vocab_size), target.view(-1))
                 val_loss += loss.item()

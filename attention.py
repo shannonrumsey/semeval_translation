@@ -115,7 +115,6 @@ class DecoderLayers(nn.Module):
     # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
     # creates mask inside function
     def forward(self, x, pad_mask, entity_embeddings=None):
-        
         if entity_embeddings is not None:
             # Decoder entity info would need to be added to the beginning or else it would be masked out
             x_with_entity = torch.cat((entity_embeddings, x), dim=1) 
@@ -138,7 +137,6 @@ class DecoderLayers(nn.Module):
 
         # Attention mask
         mask = torch.triu(torch.ones(x.shape[1] + len_entity, x.shape[1] + len_entity, device=device), diagonal= len_entity +1).bool()
-
 
         attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask, key_padding_mask=pad_mask)
 

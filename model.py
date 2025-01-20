@@ -78,25 +78,27 @@ class TransformerEncoder(nn.Module):
             - This code implies that we will need to write a seperate function for generating embeddings for the entity information
             - Entity info should have shape (entity_seq_len, embedding dim)
         """
-        if entity_info:
+        if entity_info is not None:
             pad_mask = (torch.cat((entity_info, x), dim=1) == semeval_train_dataset.vocab["<PAD>"])
         else:
             pad_mask = (x == semeval_train_dataset.vocab["<PAD>"])
-      
+
+        print(pad_mask)
+        encoder_inputs = x
         x = self.embedding(x)
         x = self.pos_embedding(x)  # pos_embedding takes in the semantic embedding and manually sums them
         # ^ this comment is for Darian because I keep forgetting this and rereading the code XD
 
-        entity_embeddings = self.entity_embeddings(entity_info) if entity_info else None
-        entity_embeddings = self.entity_pos_embedding(entity_embeddings) if entity_embeddings else None
+        entity_embeddings = self.entity_embedding(entity_info) if entity_info is not None else None
+        entity_embeddings = self.entity_pos_embedding(entity_embeddings) if entity_embeddings is not None else None
 
         # Mimics PyTorch's TransformerEncoder
         for attention_layer in self.attention_layers:
             # if entity info is provided, it will do cross attention using x + entity info as the keys and values and x as the query
             # if no info is provided, it will just do normal self attention
-            x = attention_layer(x, x, pad_mask, entity_embeddings=entity_embeddings)
+            x = attention_layer(x, x, pad_mask=pad_mask, entity_embeddings=entity_embeddings)
 
-        return x, entity_embeddings
+        return x, entity_embeddings, encoder_inputs
 
 
 class TransformerDecoder(nn.Module):
@@ -127,7 +129,7 @@ class TransformerDecoder(nn.Module):
         self.entity_position_embedding_table = nn.Embedding(max_entity_length,
                                                             n_embd)
 
-    def forward(self, decoder_input, encoder_output, encoder_entity_embeddings=None, entity_info=None,
+    def forward(self, decoder_input, encoder_output, encoder_inputs, encoder_entity_embeddings=None, entity_info=None,
                 use_encoders_entities=False):
         """
         Uses cross-attention and self-attention
@@ -154,15 +156,8 @@ class TransformerDecoder(nn.Module):
             I think we should experiment with both approaches to see which yeilds
             better results
         """
-        
-        if entity_info:
-            pad_mask = (torch.cat((entity_info, decoder_input), dim=1) == semeval_train_dataset.vocab["<PAD>"])
-             
-        else:
-            pad_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"])
-
         seq_len = decoder_input.size(1)
-        if entity_info:
+        if entity_info is not None:
             entity_len = entity_info.size(1)
 
         # embedd the decoder input 
@@ -190,10 +185,18 @@ class TransformerDecoder(nn.Module):
 
         # pass through self-attention layers
         for self_attn_block in self.self_attention_layers:
+            if entity_info is not None:
+                pad_mask = (torch.cat((entity_info, decoder_input), dim=1) == semeval_train_dataset.vocab["<PAD>"])
+            else:
+                pad_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"])
             x = self_attn_block(x, pad_mask, entity_embeddings)
 
         # pass through cross-attention layers
         for cross_attn_block in self.cross_attention_layers:
+            if entity_info is not None:
+                pad_mask = (torch.cat((entity_info, encoder_inputs), dim=1) == semeval_train_dataset.vocab["<PAD>"])
+            else:
+                pad_mask = (encoder_inputs == semeval_train_dataset.vocab["<PAD>"])
             x = cross_attn_block(x, encoder_output, pad_mask, entity_embeddings)
 
         # final linear layer to map to vocab size
