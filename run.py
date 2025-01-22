@@ -134,7 +134,6 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         decoder.eval()
         with torch.no_grad():
             for batch in val_loader:
-                print(f"Length of val loader batch: {len(batch)}")
                 if len(batch) == 4: # we don;t have any entity info
                     encoder_input, decoder_input, target, mask = batch
                     entity_info = None

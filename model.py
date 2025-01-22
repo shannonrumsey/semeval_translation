@@ -85,8 +85,7 @@ class TransformerEncoder(nn.Module):
 
         encoder_inputs = x
         x = self.embedding(x)
-        x = self.pos_embedding(x)  # pos_embedding takes in the semantic embedding and manually sums them
-        # ^ this comment is for Darian because I keep forgetting this and rereading the code XD
+        x = self.pos_embedding(x)
 
         entity_embeddings = self.entity_embedding(entity_info) if entity_info is not None else None
         entity_embeddings = self.entity_pos_embedding(entity_embeddings) if entity_embeddings is not None else None
@@ -118,10 +117,6 @@ class TransformerDecoder(nn.Module):
         self.cross_attention_layers = nn.ModuleList(
             [CrossAttentionBlock(n_embd, n_head) for _ in range(attention_layers)]
         )
-
-        # I am not sure if we want to use separate entity embeddings in the decoder or reuse the ones from the encoder.
-        # I think this is something that we need to experiment with to know for sure, thus I will include
-        # both options in this code
 
         # separate entity embeddings for just the decoder
         self.entity_embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
@@ -164,16 +159,8 @@ class TransformerDecoder(nn.Module):
 
         x = self.pos_embedding(x)
 
-        # x = token_embeddings + position_embeddings  # adding token and position embeddings
-
         if entity_info != None and use_encoders_entities is False:
-        #     # if use_encoders_entities is False, then we create new embeddings in the decoder
 
-        #     entity_token_embeddings = self.entity_embedding(decoder_input)  # batch, entity seq len, embedding size
-
-        #     entity_position_embeddings = self.entity_pos_embedding(torch.arange(entity_len, device=device))
-
-        #     entity_embeddings = entity_token_embeddings + entity_position_embeddings  # adding token and position embeddings
             entity_embeddings = self.entity_embedding(entity_info)
             entity_embeddings = self.entity_pos_embedding(entity_embeddings)
 

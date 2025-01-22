@@ -472,7 +472,6 @@ def collate_fn(batch):
 
     if all(len(item) == 5 for item in batch):
         entities = [item[4] for item in batch]
-    print("lengths of this batch:")
     encoder_input = [item[0] for item in batch]
     decoder_input = [item[1] for item in batch]
     decoder_output = [item[2] for item in batch]
