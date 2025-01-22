@@ -65,11 +65,9 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
         predictions.append(entities[:-3])
 
     # Create DataFrame with the predictions
-    writer = pd.DataFrame({'source': predictions, 'target': predictions}) # TODO: change this to the actual target entities
+    writer = pd.DataFrame({'source': predictions}) # TODO: change this to the actual target entities
 
-    writer.index.name = 'id'
-
-    writer.to_csv(output_file)
+    writer.to_csv(output_file, index = False)
 
     end_time = time.time()
     if verbose:
