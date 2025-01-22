@@ -483,13 +483,13 @@ def collate_fn(batch):
     padded_de_in = pad_sequence(decoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_de_out = pad_sequence(decoder_output, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_mask = pad_sequence(mask, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
-    print("🌻🌻 testing random encoder id inside the collate function to make sure its behaving:")
-    if len(padded_en_in) >  5:
-        for en in padded_en_in[:5]:
-            test_string = ""
-            for item in en:
-                test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
-            print(test_string)
+    # print("🌻🌻 testing random encoder id inside the collate function to make sure its behaving:")
+    # if len(padded_en_in) >  5:
+    #     for en in padded_en_in[:5]:
+    #         test_string = ""
+    #         for item in en:
+    #             test_string += semeval_train_dataset.inverse_vocab[item.item()] + " "
+    #         print(test_string)
 
     if entities is not None:
         padded_entities = pad_sequence(entities, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])

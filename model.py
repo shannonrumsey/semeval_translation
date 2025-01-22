@@ -83,7 +83,6 @@ class TransformerEncoder(nn.Module):
         else:
             pad_mask = (x == semeval_train_dataset.vocab["<PAD>"])
 
-        print(pad_mask)
         encoder_inputs = x
         x = self.embedding(x)
         x = self.pos_embedding(x)  # pos_embedding takes in the semantic embedding and manually sums them
@@ -108,9 +107,9 @@ class TransformerDecoder(nn.Module):
 
     def __init__(self, max_seq_length, max_entity_length, n_embd, n_head, vocab_size, attention_layers=5):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
-        self.position_embedding_table = nn.Embedding(max_seq_length,
-                                                     n_embd)
+        self.embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
+        self.pos_embedding = PositionalEmbedding(n_embd,
+                                                     max_seq_length)
         self.last_linear_layer = nn.Linear(n_embd, vocab_size)
 
         self.self_attention_layers = nn.ModuleList(
@@ -125,9 +124,9 @@ class TransformerDecoder(nn.Module):
         # both options in this code
 
         # separate entity embeddings for just the decoder
-        self.entity_token_embedding_table = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
-        self.entity_position_embedding_table = nn.Embedding(max_entity_length,
-                                                            n_embd)
+        self.entity_embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
+        self.entity_pos_embedding = PositionalEmbedding(n_embd,
+                                                            max_entity_length)
 
     def forward(self, decoder_input, encoder_output, encoder_inputs, encoder_entity_embeddings=None, entity_info=None,
                 use_encoders_entities=False):
@@ -161,20 +160,22 @@ class TransformerDecoder(nn.Module):
             entity_len = entity_info.size(1)
 
         # embedd the decoder input 
-        token_embeddings = self.token_embedding_table(decoder_input)  # batch, seq len, embedding size
+        x = self.embedding(decoder_input)  # batch, seq len, embedding size
 
-        position_embeddings = self.position_embedding_table(torch.arange(seq_len, device=device))
+        x = self.pos_embedding(x)
 
-        x = token_embeddings + position_embeddings  # adding token and position embeddings
+        # x = token_embeddings + position_embeddings  # adding token and position embeddings
 
         if entity_info != None and use_encoders_entities is False:
-            # if use_encoders_entities is False, then we create new embeddings in the decoder
+        #     # if use_encoders_entities is False, then we create new embeddings in the decoder
 
-            entity_token_embeddings = self.entity_token_embedding_table(decoder_input)  # batch, entity seq len, embedding size
+        #     entity_token_embeddings = self.entity_embedding(decoder_input)  # batch, entity seq len, embedding size
 
-            entity_position_embeddings = self.entity_position_embedding_table(torch.arange(entity_len, device=device))
+        #     entity_position_embeddings = self.entity_pos_embedding(torch.arange(entity_len, device=device))
 
-            entity_embeddings = entity_token_embeddings + entity_position_embeddings  # adding token and position embeddings
+        #     entity_embeddings = entity_token_embeddings + entity_position_embeddings  # adding token and position embeddings
+            entity_embeddings = self.entity_embedding(entity_info)
+            entity_embeddings = self.entity_pos_embedding(entity_embeddings)
 
         elif encoder_entity_embeddings != None and use_encoders_entities is True:
             # if use_encoders_entities is True, then we use the same entities as the encoder
