@@ -113,6 +113,7 @@ class TranslationDataset(Dataset):
                         self.vocab[token] = len(self.vocab)
 
         ## adds entity data to vocab in case any is missing (most of it will probably already be present
+
         if entity_data:
             for df in entity_data:
                 if isinstance(df, pd.DataFrame):
@@ -125,14 +126,20 @@ class TranslationDataset(Dataset):
 
                 for row in df["target"]:
 
-                    for token in row:
-                        if token not in self.vocab:
-                            self.vocab[token] = len(self.vocab)
+                    for entity in row:  # we are assuming source contains lists of entity bpes
+
+                        for token in entity:
+
+                            if token not in self.vocab:
+
+                                self.vocab[token] = len(self.vocab)
+
 
                 for row in df["source"]: # zero is source
-                    for token in row:
-                        if token not in self.vocab:
-                            self.vocab[token] = len(self.vocab)
+                    for entity in row:
+                        for token in entity:
+                            if token not in self.vocab:
+                                self.vocab[token] = len(self.vocab)
 
 
         self.inverse_vocab = {index: token for token, index in self.vocab.items()}
@@ -204,6 +211,7 @@ class TranslationDataset(Dataset):
         self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
         self.corpus_y_mask)
 
+
     def encode_semeval(self, data, entity_data=None): # for training, val, amd test semeval data
         """
         Args:
@@ -221,7 +229,8 @@ class TranslationDataset(Dataset):
         """
         if self.vocab is None:
             raise ValueError("🚩No vocab found 🚩. Please build vocab using 'make_vocab()' and try again.")
-        
+        print("printing self.vocab")
+        print(self.vocab)
         for df in data:
             source = df["source"]
             target = df["target"]
@@ -247,16 +256,32 @@ class TranslationDataset(Dataset):
         if entity_data:
             self.entity_ids = []
 
+
             for df in entity_data:
-                source = df["source"]
-                target = df["target"]
+                source = df["source"] # source is going to be like ["Be yon ce", "Dens tiny Child"]
+                target = df["target"] # target is going to be like ["Be yon ce", "Hi jo de Des tino"]
 
                 for s, t in zip(source, target): # Note: this will only be the entity data, (source and target translations for just the entity)
-                    s_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in s]
-                    t_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in t]
 
-                    new_sentence = [self.vocab["[ent_info]"]] + s_tokens + [self.vocab["->"]] + t_tokens
-                    self.entity_ids.append(torch.tensor(new_sentence))
+                    full_sentence = []
+                    for entity_index in range(len(s)):
+
+                        s_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in s[entity_index]]
+                        t_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in t[entity_index]]
+
+
+
+                        entity_sentence = [self.vocab["[ent_info]"]] + s_tokens + [self.vocab["->"]] + t_tokens # creates individual encodings and translations for each entity
+
+
+                        # example ["[ent_info]", "Be", "yon", "ce" "->", "Be", "yon", "ce" ]
+                        # example ["[ent_info]", "Dens", "tiny", "Child" "->", "Hi", "jo", "de", "Des", "tino"]
+
+                        full_sentence += entity_sentence
+                    
+                    # concant the lists for all the entities in the sentence together into a single sequence
+                    # example["[ent_info]", "Be", "yon", "ce" "->", "Be", "yon", "ce", "[ent_info]", "Dens", "tiny", "Child" "->", "Hi", "jo", "de", "Des", "tino"]
+                    self.entity_ids.append(torch.tensor(full_sentence))
 
         # Shuffle data from all languages
 
@@ -457,8 +482,8 @@ def make_dummy_entity_data(train=True):
 
     for lang, num_rows in zip(languages, lines):
         data = {
-            "source": [f"dummy source entity {lang}"] * num_rows,
-            "target": [f"dummy target entity {lang}"] * num_rows
+            "source": [f"Moscow {lang}*|*North Dakota*|*New York"] * num_rows,
+            "target": [f"Moscú {lang}*|*Dakota del Norte*|*Nueva York"] * num_rows
         }
         df = pd.DataFrame(data)
         csv_path = os.path.join(base_dir, f"{lang}.csv")
@@ -499,11 +524,15 @@ def collate_fn(batch):
 
 
 # Encode and load pretrain data
-#make_dummy_entity_data()
-#make_dummy_entity_data(train=False)
+make_dummy_entity_data()
+make_dummy_entity_data(train=False)
+
+
 semeval_train = get_semeval_train()
 semeval_val = get_semeval_val()
 entities_train = get_entity_info()
+print("printing entity head")
+print(entities_train[:4])
 entities_val = get_entity_info(train=False)
 
 print("running pretrain")
@@ -527,6 +556,7 @@ semeval_val_dataset = TranslationDataset()
 semeval_train_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 
 semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train)
+semeval_val_dataset.load_vocab(semeval_train_dataset.vocab)
 semeval_val_dataset.encode_semeval(semeval_val, entity_data=entities_val)
 semeval_val_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)

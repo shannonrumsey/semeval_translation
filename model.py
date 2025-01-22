@@ -98,6 +98,7 @@ class TransformerEncoder(nn.Module):
 
         return x, entity_embeddings, encoder_inputs
 
+    
 
 class TransformerDecoder(nn.Module):
     """
