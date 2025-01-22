@@ -59,6 +59,24 @@ class KnowledgeBase():
             return self.ent[self.ent['name'] == name][translation][0]
         except:
             return None
+    
+    def get_entity_from_id(self, identification:str) -> str:
+        """Get an entity given its id
+        
+        Args:
+            identification: str, The id we want the entity for
+        Returns:
+            If found will return the entity
+            Else will return None
+        """
+        try:
+            name = self.ent[self.ent['id'] == identification]['name']
+            if not name.empty:
+                return name.iloc[0]
+            else:
+                return None
+        except:
+            return None
         
     def get(self, query:str, translation:str):
         """ Wrapper function that will automatically look for the name in the alias table and then return the
