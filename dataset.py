@@ -425,8 +425,8 @@ def get_entity_info(just_get_lines = False, train=True):
 
             if "target" in df.columns:
 
-                df["source"] = df["source"].apply(lambda text: sp.encode(str(text), out_type=str))
-                df["target"] = df["target"].apply(lambda text: sp.encode(str(text), out_type=str))
+                df["source"] = df["source"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
+                df["target"] = df["target"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
 
                 entity_info.append(df if isinstance(df, pd.DataFrame) else pd.DataFrame(df))
     if just_get_lines:
