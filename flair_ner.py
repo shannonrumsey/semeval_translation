@@ -5,6 +5,7 @@ import torch
 import pandas as pd
 import time
 import os
+from knowledge import KnowledgeBase
 
 seed = 69
 torch.manual_seed(seed)
@@ -75,3 +76,10 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
 
 # example usage
 # ner_predictor('ar', 'train.jsonl', 'predictions_new.csv', verbose=True)
+
+""" 
+example usage of knowledge base
+
+kb = KnowledgeBase()
+print(kb.get('U.S.A.', 'fr')) 
+"""

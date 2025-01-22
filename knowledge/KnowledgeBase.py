@@ -15,6 +15,8 @@ class KnowledgeBase():
 
         ** Example Usage **
         ```
+        from knowledge import KnowledgeBase
+
         kb = KnowledgeBase()
         spanish_usa = kb.get("U.S.A", "es") -> "Estados Unidos"
 

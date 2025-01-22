@@ -1,1 +1,1 @@
-from KnowledgeBase import KnowledgeBase
+from .KnowledgeBase import KnowledgeBase
