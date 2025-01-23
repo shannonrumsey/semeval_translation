@@ -41,7 +41,11 @@ class KnowledgeBase():
             Other wise will return None
         """
         try:
-            return self.alias[self.alias['alias'] == alias]['name'][0]
+            name = self.alias[self.alias['alias'] == alias]['name']
+            if not name.empty:
+                return name.iloc[0]
+            else:
+                return None
         except:
             return None
 
@@ -56,7 +60,11 @@ class KnowledgeBase():
             Else will return None
         """
         try:
-            return self.ent[self.ent['name'] == name][translation][0]
+            translate = self.ent[self.ent['name'] == name][translation]
+            if not translate.empty:
+                return translate.iloc[0]
+            else:
+                return None
         except:
             return None
     
