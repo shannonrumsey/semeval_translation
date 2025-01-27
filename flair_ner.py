@@ -56,7 +56,7 @@ def gather_true_entities(language: str, json_file: str, output_file: str):
 
     writer.to_csv(output_path, index = False)
 
-def ner_predictor(language: str, json_file: str, output_file: str, output_translation_file: str, verbose: bool = False):
+def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool = False):
     """
     Predicts the entities in the given JSON file and saves the predictions to the output file.
     Args:
@@ -67,12 +67,10 @@ def ner_predictor(language: str, json_file: str, output_file: str, output_transl
         verbose (bool): Whether to print the predictions to the console.
     """
     start_time = time.time()
-
     path = os.path.join(os.path.dirname(__file__), 'data', 'semeval_train', language)
+    output_path = os.path.join(os.path.dirname(__file__), 'data', 'entity_info', 'train', output_file)
         
     json_path = os.path.join(path, json_file)
-    output_path = os.path.join(path, output_file)
-    translation_path = os.path.join(path, output_translation_file)
     reader = pd.read_json(json_path, lines=True)
 
     predictions = []
@@ -88,7 +86,7 @@ def ner_predictor(language: str, json_file: str, output_file: str, output_transl
     kb = KnowledgeBase()
 
     for _, row in reader.iterrows():
-        
+
         # make a sentence
         sentence = Sentence(row['source'])
         sentence.to(device=device)
@@ -116,13 +114,9 @@ def ner_predictor(language: str, json_file: str, output_file: str, output_transl
         translated_entities.append(entities[:-3])
 
     # Create DataFrame with the predictions
-    writer = pd.DataFrame({'source': predictions})
+    writer = pd.DataFrame({'source': predictions, 'target': translated_entities})
 
     writer.to_csv(output_path, index = False)
-
-    writer = pd.DataFrame({'target': translated_entities})
-
-    writer.to_csv(translation_path, index = False)
 
     end_time = time.time()
     if verbose:
@@ -130,7 +124,7 @@ def ner_predictor(language: str, json_file: str, output_file: str, output_transl
 
 # example usage
 # gather_true_entities('de', 'train.jsonl', 'true_entities.csv')
-# ner_predictor('de', 'train.jsonl', 'predictions.csv', 'targets.csv', verbose=True)
+# ner_predictor('de', 'train.jsonl', 'ar.csv', verbose=True)
 
 """ 
 example usage of knowledge base
