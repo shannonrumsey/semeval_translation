@@ -93,17 +93,17 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
             tagger.predict(sentence)
     
         entities = ""
-        entitiy_translation = ""
+        entity_translation = ""
         for entity in sentence.get_spans('ner'):
             found = kb.get(entity.text, language)
             if found:
                 entities += entity.text + "*|*"
-                entitiy_translation += str(found) + "*|*"
+                entity_translation += str(found) + "*|*"
         
         if verbose:
-            print(entities[:-3] + ", " + entitiy_translation[:-3])
+            print(entities[:-3] + ", " + entity_translation[:-3])
         predictions.append(entities[:-3])
-        translated_entities.append(entitiy_translation[:-3])
+        translated_entities.append(entity_translation[:-3])
 
     # Create DataFrame with the predictions
     writer = pd.DataFrame({'source': predictions, 'target': translated_entities})
