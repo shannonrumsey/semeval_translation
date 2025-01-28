@@ -63,7 +63,6 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
         language (str): The language of the data to be predicted.
         json_file (str): The path to the JSON file containing the data to be predicted.
         output_file (str): The path to the output file where the predictions will be saved.
-        output_translation_file (str): The path to the output file where the translations will be saved.
         verbose (bool): Whether to print the predictions to the console.
     """
     start_time = time.time()
@@ -94,24 +93,17 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
             tagger.predict(sentence)
     
         entities = ""
-        for_translation = []
+        entitiy_translation = ""
         for entity in sentence.get_spans('ner'):
-            entities += entity.text + "*|*"
-            for_translation.append(entity.text)
+            found = kb.get(entity.text, language)
+            if found:
+                entities += entity.text + "*|*"
+                entitiy_translation += str(found) + "*|*"
         
         if verbose:
-            print(entities[:-3])
+            print(entities[:-3] + ", " + entitiy_translation[:-3])
         predictions.append(entities[:-3])
-
-        entities = ""
-        for entity in for_translation:
-            found = kb.get(entity, language)
-            if found:
-                entities += str(found) + "*|*"
-
-        if verbose:
-            print(entities[:-3])
-        translated_entities.append(entities[:-3])
+        translated_entities.append(entitiy_translation[:-3])
 
     # Create DataFrame with the predictions
     writer = pd.DataFrame({'source': predictions, 'target': translated_entities})
@@ -124,7 +116,7 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
 
 # example usage
 # gather_true_entities('de', 'train.jsonl', 'true_entities.csv')
-# ner_predictor('de', 'train.jsonl', 'ar.csv', verbose=True)
+# ner_predictor('de', 'train.jsonl', 'de.csv', verbose=True)
 
 """ 
 example usage of knowledge base
