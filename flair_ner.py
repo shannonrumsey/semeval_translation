@@ -116,7 +116,7 @@ def ner_predictor(language: str, json_file: str, output_file: str, verbose: bool
 
 # example usage
 # gather_true_entities('de', 'train.jsonl', 'true_entities.csv')
-ner_predictor('de', 'train.jsonl', 'ar.csv', verbose=True)
+# ner_predictor('de', 'train.jsonl', 'de.csv', verbose=True)
 
 """ 
 example usage of knowledge base
