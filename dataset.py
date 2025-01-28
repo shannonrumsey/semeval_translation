@@ -264,6 +264,11 @@ class TranslationDataset(Dataset):
                 for s, t in zip(source, target): # Note: this will only be the entity data, (source and target translations for just the entity)
 
                     full_sentence = []
+                    if len(s) != len(t):
+                        print("\nthe error with lens occured🧘‍♀️😌🧘‍♀️😌")
+                        print(t)
+                        print(s)
+                        print("\n")
                     for entity_index in range(len(s)):
 
                         s_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in s[entity_index]]
@@ -278,7 +283,7 @@ class TranslationDataset(Dataset):
                         # example ["[ent_info]", "Dens", "tiny", "Child" "->", "Hi", "jo", "de", "Des", "tino"]
 
                         full_sentence += entity_sentence
-                    
+
                     # concant the lists for all the entities in the sentence together into a single sequence
                     # example["[ent_info]", "Be", "yon", "ce" "->", "Be", "yon", "ce", "[ent_info]", "Dens", "tiny", "Child" "->", "Hi", "jo", "de", "Des", "tino"]
                     self.entity_ids.append(torch.tensor(full_sentence))
@@ -464,8 +469,9 @@ def make_dummy_entity_data(train=True):
     Creates dummy CSV files with the specified number of rows for each file.
 
     """
+    print("NOOO FUCK YOU! STOP TRYING TO REPLACE JACKS CODE FUCKKKKKKK YOUUUUUUU")
 
-    if train:
+    '''if train:
         base_dir = "data/entity_info/train"
         lines = get_semeval_train(just_get_lines=True)  # the number of lines that should be in each df in a list
         languages = ["ar", "de", "es", "fr", "it", "ja"]
@@ -488,7 +494,7 @@ def make_dummy_entity_data(train=True):
         df = pd.DataFrame(data)
         csv_path = os.path.join(base_dir, f"{lang}.csv")
         df.to_csv(csv_path, index=False, encoding="utf-8")
-        print(f"Created file: {csv_path} with {num_rows} rows.")
+        print(f"Created file: {csv_path} with {num_rows} rows.")'''
 
 
 # Chunking not done on training data b/c source and translation must line up
@@ -524,16 +530,13 @@ def collate_fn(batch):
 
 
 # Encode and load pretrain data
-make_dummy_entity_data()
-make_dummy_entity_data(train=False)
-
 
 semeval_train = get_semeval_train()
 semeval_val = get_semeval_val()
 entities_train = get_entity_info()
 print("printing entity head")
 print(entities_train[:4])
-entities_val = get_entity_info(train=False)
+
 
 print("running pretrain")
 
@@ -544,8 +547,8 @@ pretrain_train, pretrain_val = train_test_split(pretrain_dataset, test_size=0.1,
 # No padding in the pretrainig data
 pretrain_train_loader = DataLoader(pretrain_train, batch_size=64, shuffle=True, collate_fn=collate_fn)
 pretrain_val_loader = DataLoader(pretrain_val, batch_size=64, shuffle=True, collate_fn=collate_fn)
-# print("🔎😮‍💨 analyzing pretrain dataset")
-# pretrain_dataset.make_sure_everythings_alligned_properly()
+print("🔎😮‍💨 analyzing pretrain dataset")
+pretrain_dataset.make_sure_everythings_alligned_properly()
 
 # Encode and load train data
 print("running train")
