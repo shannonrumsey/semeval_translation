@@ -106,7 +106,7 @@ class TransformerDecoder(nn.Module):
     Requires masking for self-attention
     """
 
-    def __init__(self, max_seq_length, , n_embd, n_head, vocab_size, max_entity_length=None, attention_layers=5):
+    def __init__(self, max_seq_length, , n_embd, n_head, vocab_size, max_entity_len=None, attention_layers=5):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
         self.pos_embedding = PositionalEmbedding(n_embd,
@@ -123,7 +123,7 @@ class TransformerDecoder(nn.Module):
         # separate entity embeddings for just the decoder
         if max_entity_len:
             self.entity_embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
-            self.entity_pos_embedding = PositionalEmbedding(n_embd, max_entity_length)
+            self.entity_pos_embedding = PositionalEmbedding(n_embd, max_entity_len)
 
     def forward(self, decoder_input, encoder_output, encoder_inputs, encoder_entity_embeddings=None, entity_info=None,
                 use_encoders_entities=False):

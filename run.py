@@ -50,7 +50,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 n_embd=n_embd,
                                 n_head=n_head,
                                 vocab_size=vocab_size,
-                                max_entity_length=None).to(device)
+                                max_entity_len=None).to(device)
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
