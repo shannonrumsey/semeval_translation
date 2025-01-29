@@ -121,7 +121,16 @@ def ner_predictor_validation(language: str, output_file: str, type: str, verbose
         verbose (bool): Whether to print the predictions to the console.
     """
     start_time = time.time()
-    upper_language = language.upper()
+    if language == "ar":
+        upper_language = "AE"
+    elif language == "ja":
+        upper_language = "JP"
+    elif language == "ko":
+        upper_language = "KR"
+    elif language == "zh":
+        upper_language = "TW"
+    else:
+        upper_language = language.upper()
     json_path = os.path.join(os.path.dirname(__file__), 'data', 'semeval_val', f'{language}_{upper_language}.jsonl')
     output_path = os.path.join(os.path.dirname(__file__), 'data', 'entity_info', type, output_file)
 
