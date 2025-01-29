@@ -392,7 +392,6 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
                     data_target = [json.loads(line)["target"] for line in lines if "target" in json.loads(line)]
                     data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
                     target_locale = ["<" + jsonl_file_path.split("/")[-2] + ">" for line in lines]
-                    
 
                     df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
 
@@ -401,6 +400,34 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
                     df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 
                     semeval_train.append(df)
+
+
+    # Get val datasets for the missing languages
+    val_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
+    exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
+    if os.path.isdir(val_dir):
+        for file_name in os.listdir(val_dir): 
+            base_name = os.path.splitext(file_name)[0]
+            if base_name in exceptions:
+
+                json_file_path = os.path.join(val_dir, file_name)
+                with open(json_file_path, "r", encoding="utf-8") as jsonl_file:
+
+                    lines = list(jsonl_file)
+                    rows_per_df.append(len(lines))
+
+                    data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if "targets" in json.loads(line)]
+                    data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
+                    target_locale = ["<" + base_name.split("_")[0] + ">" for line in lines]
+
+                    df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
+                    sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
+                    df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
+                    df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
+
+                    semeval_train.append(df)
+
+
     if just_get_lines:
         return rows_per_df
     else:
@@ -411,30 +438,32 @@ def get_semeval_val(just_get_lines = False): # knowing the lines will be used to
     rows_per_df = [] # once again, this will help us detect misallignments between the semeval data and the entity files
     base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
     
+    exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
     if os.path.isdir(base_dir):
         for file_name in os.listdir(base_dir): 
-            json_file_path = os.path.join(base_dir, file_name)
-            with open(json_file_path, "r", encoding="utf-8") as jsonl_file:
+            base_name = os.path.splitext(file_name)[0]
+            if base_name not in exceptions:
+                json_file_path = os.path.join(base_dir, file_name)
+                with open(json_file_path, "r", encoding="utf-8") as jsonl_file:
 
-                lines = list(jsonl_file)
-                rows_per_df.append(len(lines))
+                    lines = list(jsonl_file)
+                    rows_per_df.append(len(lines))
 
-                data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if "targets" in json.loads(line)]
-                data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
-                target_locale = ["<" + json_file_path.split("_")[-1].split(".")[0] + ">" for line in lines]
+                    data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if "targets" in json.loads(line)]
+                    data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
+                    target_locale = ["<" + base_name.split("_")[0] + ">" for line in lines]
 
-                df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
+                    df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
 
-                sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
-                df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
-                df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
+                    sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
+                    df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
+                    df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 
-                semeval_val.append(df)
+                    semeval_val.append(df)
     if just_get_lines:
         return rows_per_df
     else:
         return semeval_val
-
 
 def get_entity_info(just_get_lines = False, train=True):
     entity_info = []

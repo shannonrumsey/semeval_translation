@@ -5,6 +5,7 @@ import os
 import json
 import sentencepiece as spm
 from numpy.random import Generator, PCG64
+import sys
 
 # summary of changes 12/21:
 # pretrain now returns a dictionary of dfs for each language. This is needed to allow us to split after bpe in order to preserve sentence lengths
@@ -34,12 +35,12 @@ def get_data(lang):
         # AR, DE, and ES have two components
         if len(l) == 2:
             lang_code = l[1].split(".")[-1]
-            data = load_dataset(l[0], l[1])["train"]
+            data = load_dataset(l[0], l[1], trust_remote_code=True)["train"]
 
         # IT has combined train and test
         elif l == "squad_it":
             lang_code = "it"
-            data = load_dataset(l)
+            data = load_dataset(l, trust_remote_code=True)
             data = concatenate_datasets([data["train"], data["test"]])
 
         else:
@@ -97,6 +98,30 @@ def get_semeval_data(base_dir, for_bpe=False):
                         data = [json.loads(line) for line in jsonl_file]
                         df = pd.DataFrame(data)
 
+                    semeval_train[folder_name] = df
+
+    # Get val datasets for the missing languages
+    val_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
+    exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
+    if os.path.isdir(val_dir):
+        for file_name in os.listdir(val_dir): 
+            base_name = os.path.splitext(file_name)[0]
+            if base_name in exceptions:
+
+                json_file_path = os.path.join(val_dir, file_name)
+                with open(json_file_path, "r", encoding="utf-8") as jsonl_file:
+                    lines = list(jsonl_file)
+                    if for_bpe:
+                        data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if "targets" in json.loads(line)] # only gets the line with the translation
+                        data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
+                        combined_data = data_target + data_source
+                        df = pd.DataFrame({"text": combined_data})
+
+                    else:
+                        data = [json.loads(line) for line in jsonl_file]
+                        df = pd.DataFrame(data)
+                    
+                    folder_name = base_name.split("_")[0]
                     semeval_train[folder_name] = df
 
     return semeval_train
@@ -161,9 +186,9 @@ def get_chunks_from_corpuses(dataframes, chunk_size=35):
     new_dfs = {}
     lens = {}
     for key, df in dataframes.items():
+        print(key)
         sub_word_df = apply_bpe_tokenizer(df, "text")
         sub_word_df["text"] = sub_word_df["text"].apply(lambda row: " ".join(row))
-        print(sub_word_df.head())
         corpus = " ".join(sub_word_df["text"].dropna()) # join all the text in the df into one corpus so that chunking can occur
 
         chunks = []
@@ -198,6 +223,8 @@ def get_chunks_from_corpuses(dataframes, chunk_size=35):
     return sampled_dfs
 
 pretrain = get_chunks_from_corpuses(pretrain, 35)
+
+sys.exit(0)
 print("after_chunking!!!")
 for key, df in pretrain.items():
     print(key)
@@ -264,6 +291,3 @@ for df in all_dfs:
 for lang_key, masked_df in masked_dfs.items():
     file_path = os.path.join(os.path.dirname(__file__), f"data/processed_pretrain/{lang_key}_masked_data.csv")
     masked_df.to_csv(file_path, index=False)
-
-
-
