@@ -271,7 +271,7 @@ class TranslationDataset(Dataset):
         if self.vocab is None:
             raise ValueError("🚩No vocab found 🚩. Please build vocab using 'make_vocab()' and try again.")
         print("printing self.vocab")
-        print(self.vocab)
+        #print(self.vocab)
         for key in lang_processing_order:
             print("key being processed: ", key)
             df = data[key]
@@ -335,9 +335,31 @@ class TranslationDataset(Dataset):
 
         # concatinates entity info to the encoder if entity info is present
         if self.entity_ids is not None:
+            print("we are merging entities with inputs")
+            print("\n\n❤️😍😘BABY DOLL START PAYING ATTENTION ❤️😍😘❤️😍😘❤️😍😘\n")
+            print("🥭🥭ORIGINAL SHAPE OF FIRST ENCODER ID")
+            print(self.corpus_encoder_ids[0].shape)
+            string = ""
+            for x in self.corpus_encoder_ids[0]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
+
+            print("🥭🥭ORIGINAL SHAPE OF FIRST ENTITY ID")
+            print(self.entity_ids[0].shape)
+            string = ""
+            for x in self.entity_ids[0]:
+                string += self.inverse_vocab[x.item()] 
+            print(string)
+
             self.corpus_encoder_ids = [
                 torch.cat((c, e), dim=-1) for c, e in zip(self.corpus_encoder_ids, self.entity_ids)
             ]
+            print("🥭🥭AFTER SHAPE OF FIRST ENCODER ID")
+            print(self.corpus_encoder_ids[0].shape)
+            string = ""
+            for x in self.corpus_encoder_ids[0]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
         # Shuffle data from all languages
         if self.entity_ids is not None:
             paired_data = list(
@@ -562,7 +584,7 @@ def make_dummy_entity_data(train=True):
 
     """
     print("NOOO FUCK YOU! STOP TRYING TO REPLACE JACKS CODE FUCKKKKKKK YOUUUUUUU")
-
+    '''
     if train:
         base_dir = "data/entity_info/train"
         lines = get_semeval_train(just_get_lines=True)  # the number of lines that should be in each df in a list
@@ -587,7 +609,7 @@ def make_dummy_entity_data(train=True):
         df = pd.DataFrame(data)
         csv_path = os.path.join(base_dir, f"{lang}.csv")
         df.to_csv(csv_path, index=False, encoding="utf-8")
-        print(f"Created file: {csv_path} with {num_rows} rows.")
+        print(f"Created file: {csv_path} with {num_rows} rows.")'''
 
 
 # Chunking not done on training data b/c source and translation must line up
@@ -623,8 +645,8 @@ def collate_fn(batch):
 
 
 # Encode and load pretrain data
-make_dummy_entity_data(train= True)
-make_dummy_entity_data(train= False)
+#make_dummy_entity_data(train= True)
+#make_dummy_entity_data(train= False)
 semeval_train = get_semeval_train()
 semeval_val = get_semeval_val()
 entities_train = get_entity_info()
