@@ -13,6 +13,8 @@ import ast
 from sklearn.model_selection import train_test_split
 import sys
 
+path = lambda x: os.path.join(os.path.dirname(__file__), x) #relative path lambda abuse, call lambda abuse hotline for more details 
+
 # define dataset
 print("defining the dataset")
 class TranslationDataset(Dataset):
@@ -471,8 +473,7 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
                 df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 
                 semeval_train[lang_name] = df
-                os.makedirs('cal_test', exist_ok=True) #outputting this shit to a file to make sure it looks okay
-                df.to_csv(f'cal_test/{lang_name}.csv')
+                
         except:
             print(f"🙈🙈🙈 WHOOPSIE DASIE 🙈🙈🙈\nFile: {file} is cursed. Consider casting a spell to counter\nYou are fine if this is the .DS_STORE")
 
@@ -506,8 +507,6 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
 
                     semeval_train[lang_name] = df
 
-                    os.makedirs('cal_test', exist_ok=True)
-                    df.to_csv(f'cal_test/{lang_name}.csv')
 
 
     if just_get_lines:
@@ -551,33 +550,44 @@ def get_semeval_val(just_get_lines = False): # knowing the lines will be used to
         return semeval_val
 
 def get_entity_info(just_get_lines = False, train=True):
+    get_lang = lambda x: x.split('.')[0] #cheeky ass mf lambda (report lambda abuse)
     entity_info = {}
     num_rows = []
+
     if train:
-        base_dir = os.path.join(os.path.dirname(__file__), "data/entity_info/train")
+        base_dir = path("data/entity_info/train")
     else:
-        base_dir = os.path.join(os.path.dirname(__file__), "data/entity_info/val")
+        base_dir = path("data/entity_info/val")
 
     sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
 
-    for df_name in os.listdir(base_dir):
-        print("entity df name: ", df_name)
-        csv_file_path = os.path.join(base_dir, df_name)
+    def add_lang_to_ent_info(lang, file): #subprocess to add our language to the ent info for DRY
+        df = pd.read_csv(file) #load csv 
+        num_rows.append(df.shape[0]) #idk this was in the old loop so i kept it but seems not needed unless "just_get_lines = true"
+        df["source"] = df["source"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")]) 
+        df["target"] = df["target"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
 
+        entity_info[lang] = df 
 
-        if os.path.isfile(csv_file_path) and csv_file_path.endswith(".csv"):
-            df = pd.read_csv(csv_file_path)
-            num_rows.append(df.shape[0])
-            entity_lang = df_name.split(".")[0]
-            if "target" in df.columns:
+    for df_name in os.listdir(base_dir): #main loop
+        try:
+            print("entity df name: ", df_name)
+            csv_file_path = os.path.join(base_dir, df_name)
+            entity_lang = get_lang(df_name)
 
-                df["source"] = df["source"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
-                df["target"] = df["target"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
-                if isinstance(df, pd.DataFrame):
-                    entity_info[entity_lang] = df
-                else:
-                    entity_info[entity_lang] = pandas.DataFrame(df)
+            add_lang_to_ent_info(entity_lang, csv_file_path)
+        except:
+            print(f'👺 YOU FUCKED UP\nBURN IN HELL🔥🔥🔥\n' if df_name.find('.DS') == -1 else f'Calmate\nNo real problem') #if 
 
+    if train: #if training we want these validation entity files 
+        val_path = path('data/entity_info/val')
+        needed = set(['ko.csv', 'th.csv', 'tr.csv', 'zh.csv'])
+        for file in os.listdir(val_path): #iterate over validation entity files 
+            if file in needed: #grab needed ones
+                lang = get_lang(file) 
+                add_lang_to_ent_info(lang, f'{val_path}/{file}')
+
+    
     if just_get_lines:
         return num_rows
     else:
