@@ -43,14 +43,13 @@ class TransformerEncoder(nn.Module):
     No masking for self-attention
     """
 
-    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len, max_entity_len=None):
+    def __init__(self, vocab_size, n_embd, n_head, n_layer, max_seq_len, max_entity_len):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)
         self.pos_embedding = PositionalEmbedding(n_embd, max_seq_len)
 
-        if max_entity_len:
-            self.entity_embedding = nn.Embedding(vocab_size, n_embd)
-            self.entity_pos_embedding = PositionalEmbedding(n_embd, max_entity_len)
+        self.entity_embedding = nn.Embedding(vocab_size, n_embd)
+        self.entity_pos_embedding = PositionalEmbedding(n_embd, max_entity_len)
 
         # Note: here I code embeddings and entity embeddings separately, although you could also have them use the
         # same embeddings
@@ -106,7 +105,7 @@ class TransformerDecoder(nn.Module):
     Requires masking for self-attention
     """
 
-    def __init__(self, max_seq_length, , n_embd, n_head, vocab_size, max_entity_len=None, attention_layers=5):
+    def __init__(self, max_seq_length, n_embd, n_head, vocab_size, max_entity_len, attention_layers=5):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
         self.pos_embedding = PositionalEmbedding(n_embd,
@@ -121,12 +120,11 @@ class TransformerDecoder(nn.Module):
         )
 
         # separate entity embeddings for just the decoder
-        if max_entity_len:
-            self.entity_embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
-            self.entity_pos_embedding = PositionalEmbedding(n_embd, max_entity_len)
+        self.entity_embedding = nn.Embedding(vocab_size, n_embd)  # will give us token embeddings
+        self.entity_pos_embedding = PositionalEmbedding(n_embd, max_entity_len)
 
     def forward(self, decoder_input, encoder_output, encoder_inputs, encoder_entity_embeddings=None, entity_info=None,
-                use_encoders_entities=False):
+                use_encoders_entities=False, entities_in_self_attn=True):
         """
         Uses cross-attention and self-attention
         Args:
@@ -174,13 +172,20 @@ class TransformerDecoder(nn.Module):
             entity_embeddings = None 
 
         # pass through self-attention layers
-        for self_attn_block in self.self_attention_layers:
-            if entity_info is not None:
-                pad_mask = (torch.cat((entity_info, decoder_input), dim=1) == semeval_train_dataset.vocab["<PAD>"])
-            else:
-                pad_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"])
-            x = self_attn_block(x, pad_mask, entity_embeddings)
+        if entities_in_self_attn == True: 
+            for self_attn_block in self.self_attention_layers:
+                if entity_info is not None:
+                    pad_mask = (torch.cat((entity_info, decoder_input), dim=1) == semeval_train_dataset.vocab["<PAD>"])
+                else:
+                    pad_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"])
+                x = self_attn_block(x, pad_mask, entity_embeddings)
 
+        else:
+            for self_attn_block in self.self_attention_layers:
+                pad_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"])
+                x = self_attn_block(x, pad_mask, entity_embeddings=None)
+
+    
         # pass through cross-attention layers
         for cross_attn_block in self.cross_attention_layers:
             if entity_info is not None:

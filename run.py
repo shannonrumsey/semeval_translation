@@ -9,6 +9,8 @@ import sys
 """
 entity_info should be batches of entities, corresponding to the input data
 """
+
+# Note: entities_in_self_attn is a flag ONLY for our fourth experiment. It just adds an if-else statement in the decoder to not use entities during self attention
 vocab_size = len(pretrain_dataset.vocab)
 # in order to set the proper size for max seq length for our positional embeddings
 def find_max_sequence_length(dataset, entity= False): # if entity == True, it will return the max entitry length
@@ -45,12 +47,12 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 n_head=n_head,
                                 n_layer=n_layer,
                                 max_seq_len=max_seq_len,
-                                max_entity_len=None).to(device)
+                                max_entity_len=entity_len).to(device)
     decoder = TransformerDecoder(max_seq_length=max_seq_len,
                                 n_embd=n_embd,
                                 n_head=n_head,
                                 vocab_size=vocab_size,
-                                max_entity_len=None).to(device)
+                                max_entity_len=entity_len).to(device)
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
@@ -69,7 +71,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 50
+    num_epoch = 1
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -112,8 +114,8 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             enc_optimizer.zero_grad()
             dec_optimizer.zero_grad()
 
-            hidden_states, encoder_entities, encoder_inputs = encoder(encoder_input, entity_info=entity_info)
-            decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=entity_info) # NOTE: the encoder returns the embeddings it used for entities
+            hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(encoder_input, entity_info=None)
+            decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=None, use_encoders_entities=False, entities_in_self_attn=True) # NOTE: the encoder returns the embeddings it used for entities
             # The decoder CAN use these embeddings by taking it in as a parameter, but it doesnt have to. If the encoder entity embeddings are not provided,
             # it will make its own entity embeddings
             # in this code, I am telling decoder to use the encoder entity embedings, but we can change this later when experimenting
@@ -151,8 +153,8 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 else:
                     entity_info = None
 
-                hidden_states, encoder_entities, encoder_inputs = encoder(encoder_input, entity_info=entity_info)
-                decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=entity_info)
+                hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(encoder_input, entity_info=None)
+                decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=None, use_encoders_entities=False, entities_in_self_attn=True)
 
                 loss = loss_fn(decoder_outputs.view(-1, vocab_size), target.view(-1))
                 val_loss += loss.item()
@@ -174,12 +176,12 @@ train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/tra
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model")
 
 # Pretrain model
-run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
-          val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
-          pretrain_decoder_path=pretrain_decoder_path, train=False)
+# run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
+#           val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
+#           pretrain_decoder_path=pretrain_decoder_path, train=False)
 
-'''# Train model
+# Train model
 run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader,
           val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path,
           pretrain_decoder_path=pretrain_decoder_path, train_encoder_path=train_encoder_path,
-          train_decoder_path=train_decoder_path, train=True)'''
+          train_decoder_path=train_decoder_path, train=True)
