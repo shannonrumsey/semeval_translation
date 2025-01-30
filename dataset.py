@@ -302,7 +302,7 @@ class TranslationDataset(Dataset):
 
             for key in lang_processing_order:
                 print("key being processed: ", key)
-                df = entity_data[key]
+                df = entity_data[key] # The koreans are pissing this off (🇰🇵)
                 source = df["source"] # source is going to be like ["Be yon ce", "Dens tiny Child"]
                 target = df["target"] # target is going to be like ["Be yon ce", "Hi jo de Des tino"]
 
@@ -447,32 +447,34 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
 
     # code adapted from pretrain.py with minor modifications
     # expected format: train -> [ar -> train.jsonl, de -> train.jsonl...]
-    for folder_name in os.listdir(base_dir):
-        folder_path = os.path.join(base_dir, folder_name)
+    for file in os.listdir(base_dir):
+        jsonl_file_path = os.path.join(base_dir, file)
 
         # check if the path is a language folder
-        if os.path.isdir(folder_path):
-            jsonl_file_path = os.path.join(folder_path, "train.jsonl")
-            lang_name = folder_name
-            print("train lang name: ", lang_name)
-            if os.path.isfile(jsonl_file_path):
-                with open(jsonl_file_path, "r", encoding="utf-8") as jsonl_file:
+        lang_name = file.split("_")[0] #Tucker Carlson levels of hackyness
+        print("train lang name: ", lang_name)
+        try:
+            with open(jsonl_file_path, "r", encoding="utf-8") as jsonl_file:
 
 
-                    lines = list(jsonl_file)
-                    rows_per_df.append(len(lines))
+                lines = list(jsonl_file)
+                rows_per_df.append(len(lines))
 
-                    data_target = [json.loads(line)["target"] for line in lines if "target" in json.loads(line)]
-                    data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
-                    target_locale = ["<" + jsonl_file_path.split("/")[-2] + ">" for line in lines]
+                data_target = [json.loads(line)["target"] for line in lines if "target" in json.loads(line)]
+                data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
+                target_locale = [f"<{lang_name}>" for line in lines]
 
-                    df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
+                df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
 
-                    sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
-                    df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
-                    df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
+                sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
+                df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
+                df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 
-                    semeval_train[lang_name] = df
+                semeval_train[lang_name] = df
+                os.makedirs('cal_test', exist_ok=True) #outputting this shit to a file to make sure it looks okay
+                df.to_csv(f'cal_test/{lang_name}.csv')
+        except:
+            print(f"🙈🙈🙈 WHOOPSIE DASIE 🙈🙈🙈\nFile: {file} is cursed. Consider casting a spell to counter\nYou are fine if this is the .DS_STORE")
 
 
     # Get val datasets for the missing languages
@@ -503,6 +505,9 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
                     df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 
                     semeval_train[lang_name] = df
+
+                    os.makedirs('cal_test', exist_ok=True)
+                    df.to_csv(f'cal_test/{lang_name}.csv')
 
 
     if just_get_lines:
@@ -682,7 +687,7 @@ semeval_train_dataset.load_vocab(pretrain_dataset.vocab)
 semeval_val_dataset.load_vocab(pretrain_dataset.vocab)
 
 
-semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train)
+semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train) #Problem child ATM 
 
 entities_val = get_entity_info(train = False)
 print("printing entity head")
