@@ -76,29 +76,26 @@ def get_semeval_data(base_dir, for_bpe=False):
     semeval_train = {}
 
     # expected format: train -> [ar -> train.jsonl, de -> train.jsonl...]
-    for folder_name in os.listdir(base_dir):
-        folder_path = os.path.join(base_dir, folder_name)
+    # expected format: train -> [ar -> ar_AE.jsonl, de -> de_DE.jsonl]
+    for file_name in os.listdir(base_dir):
+        file_path = os.path.join(base_dir, file_name)
 
-        # check if the path is a language folder
-        if os.path.isdir(folder_path):
-            jsonl_file_path = os.path.join(folder_path, "train.jsonl")
+        if os.path.isfile(file_path):
+            with open(file_path, "r", encoding="utf-8") as jsonl_file:
 
-            if os.path.isfile(jsonl_file_path):
-                with open(jsonl_file_path, "r", encoding="utf-8") as jsonl_file:
+                if for_bpe:
+                    data_target = [json.loads(line)["target"] for line in jsonl_file if "target" in json.loads(line)] # only gets the line with the translation
+                    data_source = [json.loads(line)["source"] for line in jsonl_file if
+                                    "source" in json.loads(line)]
+                    combined_data = data_target + data_source
 
-                    if for_bpe:
-                        data_target = [json.loads(line)["target"] for line in jsonl_file if "target" in json.loads(line)] # only gets the line with the translation
-                        data_source = [json.loads(line)["source"] for line in jsonl_file if
-                                       "source" in json.loads(line)]
-                        combined_data = data_target + data_source
+                    df = pd.DataFrame({"text": combined_data})
 
-                        df = pd.DataFrame({"text": combined_data})
+                else:
+                    data = [json.loads(line) for line in jsonl_file]
+                    df = pd.DataFrame(data)
 
-                    else:
-                        data = [json.loads(line) for line in jsonl_file]
-                        df = pd.DataFrame(data)
-
-                    semeval_train[folder_name] = df
+                semeval_train[folder_name] = df
 
     # Get val datasets for the missing languages
     val_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
