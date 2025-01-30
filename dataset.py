@@ -13,8 +13,6 @@ import ast
 from sklearn.model_selection import train_test_split
 import sys
 
-path_join = lambda x: os.path.join(os.path.dirname(__file__), x) #lambda file join
-
 # define dataset
 print("defining the dataset")
 class TranslationDataset(Dataset):
@@ -161,7 +159,7 @@ class TranslationDataset(Dataset):
                     print(df)
                     print(type(df))
 
-                    print("entity_data is NOT a df") 
+                    print("entity_data is NOT a df")
 
                 for row in df["target"]:
 
@@ -445,35 +443,40 @@ for filename in os.listdir(folder_path):
 def get_semeval_train(just_get_lines = False): # knowing the lines will be used to check if the entities line up with the train dfs
     semeval_train = {}
     rows_per_df = [] # once again, this will help us detect misallignments between the semeval data and the entity files
-    base_dir = path_join("data/semeval_train") #MODIFIED: Cal renamed the train files to match the val and test formats
+    base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_train")
 
     # code adapted from pretrain.py with minor modifications
     # expected format: train -> [ar -> train.jsonl, de -> train.jsonl...]
-    for lang in os.listdir(base_dir):
-        json_path = os.path.join(base_dir, lang) #join the base train directory to the language file
-        lang_name = lang.split("_")[0]
-        print("lang name in edited train: ", lang_name)
-        if lang_name != ".DS":
-        #Modification: Making this point to the language file and encapsulating in a try/except
-            try:
-                # check if the path is a language folder
-                with open(json_path, "r", encoding="utf-8") as jsonl_file:
-                    df = pd.read_json(jsonl_file, lines=True,  encoding_errors='ignore')
+    for folder_name in os.listdir(base_dir):
+        folder_path = os.path.join(base_dir, folder_name)
 
-                sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
-                df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
-                df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
+        # check if the path is a language folder
+        if os.path.isdir(folder_path):
+            jsonl_file_path = os.path.join(folder_path, "train.jsonl")
+            lang_name = folder_name
+            print("train lang name: ", lang_name)
+            if os.path.isfile(jsonl_file_path):
+                with open(jsonl_file_path, "r", encoding="utf-8") as jsonl_file:
 
-                semeval_train[lang_name] = df
 
-            except NotADirectoryError:
-                continue #functionally this is the same as not being surrounded by if statements
-            except FileNotFoundError:
-                continue
+                    lines = list(jsonl_file)
+                    rows_per_df.append(len(lines))
+
+                    data_target = [json.loads(line)["target"] for line in lines if "target" in json.loads(line)]
+                    data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
+                    target_locale = ["<" + jsonl_file_path.split("/")[-2] + ">" for line in lines]
+
+                    df = pd.DataFrame({"source": data_source, "target": data_target, "target_locale": target_locale})
+
+                    sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
+                    df["source"] = df["source"].apply(lambda text: sp.encode(text, out_type=str))
+                    df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
+
+                    semeval_train[lang_name] = df
 
 
     # Get val datasets for the missing languages
-    val_dir = path_join("data/semeval_val")
+    val_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
     exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
     if os.path.isdir(val_dir):
         for file_name in os.listdir(val_dir): 
@@ -510,7 +513,7 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
 def get_semeval_val(just_get_lines = False): # knowing the lines will be used to check if the entities line up with the train dfs
     semeval_val = {}
     rows_per_df = [] # once again, this will help us detect misallignments between the semeval data and the entity files
-    base_dir = path_join("data/semeval_val")
+    base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
     
     exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
     if os.path.isdir(base_dir):
@@ -542,15 +545,13 @@ def get_semeval_val(just_get_lines = False): # knowing the lines will be used to
     else:
         return semeval_val
 
-
-
 def get_entity_info(just_get_lines = False, train=True):
     entity_info = {}
     num_rows = []
     if train:
-        base_dir = path_join("data/entity_info/train")
+        base_dir = os.path.join(os.path.dirname(__file__), "data/entity_info/train")
     else:
-        base_dir = path_join("data/entity_info/val")
+        base_dir = os.path.join(os.path.dirname(__file__), "data/entity_info/val")
 
     sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
 
@@ -693,6 +694,7 @@ semeval_val_dataset.encode_semeval(semeval_val, train = False) # NOTE: need to a
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 
+
 # print("🟥🟥testing a random encoder id:")
 # test_string = ""
 # for item in semeval_train_dataset.corpus_encoder_ids[30]:
@@ -714,4 +716,3 @@ semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True
 
 # print("🔎😮‍💨 analyzing train dataset ")
 # semeval_dataset.make_sure_everythings_alligned_properly()
-
