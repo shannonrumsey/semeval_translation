@@ -2,8 +2,11 @@ from KnowledgeBase import KnowledgeBase
 import unittest
 
 class TestKB(unittest.TestCase):
-    
+    """Unit tests for the Knowledge Base Class
+        Make sure all functions act as they should
 
+        call via `$python knowledge/test.py` to ensure validity
+    """
     def test_get_by_id(self):
         KB = KnowledgeBase()
         query = KB.get_entity_from_id('Q1225')

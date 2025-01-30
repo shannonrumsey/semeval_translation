@@ -379,7 +379,7 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
     # code adapted from pretrain.py with minor modifications
     # expected format: train -> [ar -> train.jsonl, de -> train.jsonl...]
     for lang in os.listdir(base_dir):
-        json_path = os.path.join(base_dir, f'{lang}.jsonl') #join the base train directory to the language file 
+        json_path = os.path.join(base_dir, lang) #join the base train directory to the language file 
 
         #Modification: Making this point to the language file and encapsulating in a try/except
         try:
@@ -567,7 +567,8 @@ def collate_fn(batch):
 # Encode and load pretrain data
 
 semeval_train = get_semeval_train()
-semeval_val = get_semeval_val()
+print(semeval_train)
+""" semeval_val = get_semeval_val()
 entities_train = get_entity_info()
 print("printing entity head")
 print(entities_train[:4])
@@ -600,7 +601,7 @@ semeval_val_dataset.make_vocab(pretrain_list, semeval_train, entities_train)
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 
-
+ """
 # print("🟥🟥testing a random encoder id:")
 # test_string = ""
 # for item in semeval_train_dataset.corpus_encoder_ids[30]:
