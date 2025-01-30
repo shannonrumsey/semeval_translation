@@ -88,7 +88,6 @@ def ner_predictor(language: str, output_file: str, verbose: bool = False, direct
     output_path = os.path.join(os.path.dirname(__file__), 'data', 'entity_info', directory, output_file)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     reader = pd.read_json(path, lines=True)
-
     predictions = []
     translated_entities = []
 
