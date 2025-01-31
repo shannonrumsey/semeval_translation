@@ -1,6 +1,9 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
 
+import setproctitle
+setproctitle.setproctitle("SemEval_Pretraining")
+
 from dataset import pretrain_dataset, semeval_train_dataset, semeval_val_dataset, semeval_train_loader, semeval_val_loader, pretrain_train_loader, pretrain_val_loader
 import os
 import torch
@@ -15,13 +18,14 @@ entity_info should be batches of entities, corresponding to the input data
 
 # Note: entities_in_self_attn is a flag ONLY for our fourth experiment. It just adds an if-else statement in the decoder to not use entities during self attention
 vocab_size = len(pretrain_dataset.vocab)
+
 # in order to set the proper size for max seq length for our positional embeddings
 def find_max_sequence_length(dataset, entity= False): # if entity == True, it will return the max entitry length
     if entity:
-        if dataset.entity_ids != None:
-
+        if dataset.entity_ids:
             longest_entity = max(len(ids) for ids in dataset.entity_ids)
-        return longest_entity
+            return longest_entity
+        return 0  # Return 0 if there are no entities or entity_ids is None
     else:
         for ids in dataset.corpus_encoder_ids:
             print(len(ids))
@@ -34,6 +38,7 @@ max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
 max_seq_len_train = find_max_sequence_length(dataset=semeval_train_dataset)
 max_seq_len_val = find_max_sequence_length(dataset=semeval_val_dataset)
 max_seq_len = max(max_seq_len_pretrain, max_seq_len_train, max_seq_len_val)
+
 entity_len_train = find_max_sequence_length(dataset=semeval_train_dataset, entity = True)
 entity_len_val = find_max_sequence_length(dataset=semeval_val_dataset, entity = True)
 
@@ -74,7 +79,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 30
+    num_epoch = 60
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
