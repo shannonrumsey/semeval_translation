@@ -1,3 +1,6 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
+
 from dataset import pretrain_dataset, semeval_train_dataset, semeval_val_dataset, semeval_train_loader, semeval_val_loader, pretrain_train_loader, pretrain_val_loader
 import os
 import torch
@@ -71,7 +74,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 1
+    num_epoch = 30
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -176,12 +179,12 @@ train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/tra
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model")
 
 # Pretrain model
-# run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
-#           val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
-#           pretrain_decoder_path=pretrain_decoder_path, train=False)
+run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
+          val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
+          pretrain_decoder_path=pretrain_decoder_path, train=False)
 
 # Train model
-run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader,
-          val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path,
-          pretrain_decoder_path=pretrain_decoder_path, train_encoder_path=train_encoder_path,
-          train_decoder_path=train_decoder_path, train=True)
+# run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader,
+#           val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path,
+#           pretrain_decoder_path=pretrain_decoder_path, train_encoder_path=train_encoder_path,
+#           train_decoder_path=train_decoder_path, train=True)
