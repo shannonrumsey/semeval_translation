@@ -1,5 +1,4 @@
 import json
-
 import pandas
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -13,28 +12,33 @@ import ast
 from sklearn.model_selection import train_test_split
 import sys
 
-path = lambda x: os.path.join(os.path.dirname(__file__), x) #relative path lambda abuse, call lambda abuse hotline for more details 
+path = lambda x: os.path.join(os.path.dirname(__file__),
+                              x)  # relative path lambda abuse, call lambda abuse hotline for more details
 
 # define dataset
 print("defining the dataset")
+
+
 class TranslationDataset(Dataset):
     """
     Loads the data from the CSV files generated in pretrain.py
     """
-    def __init__(self, vocab = None):
+
+    def __init__(self, vocab=None):
         if vocab != None:
             self.vocab = vocab
         else:
-            self.vocab = {"<PAD>": 0, "<unk>": 1, "[ent_info]": 2, "->": 3}  # special symbols which may not be in the data but need to be included
+            self.vocab = {"<PAD>": 0, "<unk>": 1, "[ent_info]": 2,
+                          "->": 3}  # special symbols which may not be in the data but need to be included
 
         self.inverse_vocab = None
         self.corpus_encoder_ids = []
         self.corpus_decoder_ids = []
         self.corpus_target_ids = []
-        self.corpus_y_mask = [] # In the case of pretrain, this will be a dummy variable (all 1s, indicating no padding)
+        self.corpus_y_mask = []  # In the case of pretrain, this will be a dummy variable (all 1s, indicating no padding)
         self.entity_ids = None
 
-    def make_vocab(self, pretrain_data, train_data, entity_data = None, val_data = None):
+    def make_vocab(self, pretrain_data, train_data, entity_data=None, val_data=None):
         """
         Args:
             - pretrain_data (DataFrame): contains encoder input, decoder input, and decoder output (expected output).
@@ -51,12 +55,12 @@ class TranslationDataset(Dataset):
             for row in df["encoder_input"]:
                 if isinstance(row, list):
                     pass
-                else: # in some of the dfs, the lists got saved as strings
+                else:  # in some of the dfs, the lists got saved as strings
                     try:
                         row = ast.literal_eval(row)
                         if isinstance(row, list):
                             pass
-                            #print("Successfully converted to list:", row)
+                            # print("Successfully converted to list:", row)
                         else:
                             print(f"row is not a list, it is of type {type(row)}: {row}")
                     except (ValueError, SyntaxError):
@@ -66,7 +70,8 @@ class TranslationDataset(Dataset):
                     if token not in self.vocab:
                         self.vocab[token] = len(self.vocab)
 
-            for row in df["decoder_input"]: # most of these will probably already be in the input, but the masked ones might not be
+            for row in df[
+                "decoder_input"]:  # most of these will probably already be in the input, but the masked ones might not be
                 if isinstance(row, list):
                     pass
                 else:  # in some of the dfs, the lists got saved as strings
@@ -74,7 +79,7 @@ class TranslationDataset(Dataset):
                         row = ast.literal_eval(row)
                         if isinstance(row, list):
                             pass
-                            #print("Successfully converted to list:", row)
+                            # print("Successfully converted to list:", row)
                         else:
                             print(f"row is not a list, it is of type {type(row)}: {row}")
                     except (ValueError, SyntaxError):
@@ -95,7 +100,6 @@ class TranslationDataset(Dataset):
             else:
                 print("train is NOT a df")
 
-
             for row in df["source"]:
                 if isinstance(row, list):
                     pass
@@ -104,7 +108,7 @@ class TranslationDataset(Dataset):
                         row = ast.literal_eval(row)
                         if isinstance(row, list):
                             pass
-                            #print("Successfully converted to list:", row)
+                            # print("Successfully converted to list:", row)
                         else:
                             print(f"row is not a list, it is of type {type(row)}: {row}")
                     except (ValueError, SyntaxError):
@@ -127,7 +131,6 @@ class TranslationDataset(Dataset):
                 else:
                     print("val is NOT a df")
 
-
                 for row in df["source"]:
                     if isinstance(row, list):
                         pass
@@ -136,7 +139,7 @@ class TranslationDataset(Dataset):
                             row = ast.literal_eval(row)
                             if isinstance(row, list):
                                 pass
-                                #print("Successfully converted to list:", row)
+                                # print("Successfully converted to list:", row)
                             else:
                                 print(f"row is not a list, it is of type {type(row)}: {row}")
                         except (ValueError, SyntaxError):
@@ -170,20 +173,17 @@ class TranslationDataset(Dataset):
                         for token in entity:
 
                             if token not in self.vocab:
-
                                 self.vocab[token] = len(self.vocab)
 
-
-                for row in df["source"]: # zero is source
+                for row in df["source"]:  # zero is source
                     for entity in row:
                         for token in entity:
                             if token not in self.vocab:
                                 self.vocab[token] = len(self.vocab)
 
-
         self.inverse_vocab = {index: token for token, index in self.vocab.items()}
 
-    def load_vocab(self, vocab): # this method will be used for val amd test sets to ensure they have the same vocab
+    def load_vocab(self, vocab):  # this method will be used for val amd test sets to ensure they have the same vocab
         self.vocab = vocab
         self.inverse_vocab = {index: token for token, index in self.vocab.items()}
 
@@ -232,8 +232,6 @@ class TranslationDataset(Dataset):
                 target_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in row]
                 self.corpus_target_ids.append(torch.tensor(target_ids))
 
-
-
                 dummy_mask = torch.ones(len(target_ids))
                 # we will need to have masks for the actual task to only take the loss on the translation part.
                 # For pretrain we will just use a dummy mask of all 1s so that we dont need to change the code greatly
@@ -247,18 +245,17 @@ class TranslationDataset(Dataset):
 
         # convert from iter data type to list data type
         self.corpus_encoder_ids, self.corpus_decoder_ids, self.corpus_target_ids, self.corpus_y_mask = list(
-        self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
-        self.corpus_y_mask)
+            self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
+            self.corpus_y_mask)
 
-
-    def encode_semeval(self, data, entity_data=None, train = True): # for training, val, amd test semeval data
+    def encode_semeval(self, data, entity_data=None, train=True):  # for training, val, amd test semeval data
         """
         Args:
             data (list of DataFrames): Similar to the encode_pretrain inputs where the SemEval data is split up into a list of DataFrames
                                         by language.
             entity_data (list of dataFrames): each DataFrame is associated with a language. DataFrames contain entity information
                                         with column "source" being the english translation and column "target" being the forgien translation
-        Outputs: 
+        Outputs:
                 se_corpus_encoder_ids (list of lists): encoder inputs (English sentence)
                 se_corpus_decoder_ids (list of lists): decoder inputs (translated sentence)
                 se_corpus_target_ids (list of lists): expected decoder outputs (translated sentence shifted one token to the right)
@@ -268,12 +265,12 @@ class TranslationDataset(Dataset):
         """
         if train:
             lang_processing_order = ["ar", "de", "es", "fr", "it", "ja", "ko", "th", "tr", "zh"]
-        else: # for val, we only use the languages we have val on
+        else:  # for val, we only use the languages we have val on
             lang_processing_order = ["ar", "de", "es", "fr", "it", "ja"]
         if self.vocab is None:
             raise ValueError("🚩No vocab found 🚩. Please build vocab using 'make_vocab()' and try again.")
         print("printing self.vocab")
-        #print(self.vocab)
+        # print(self.vocab)
         for key in lang_processing_order:
             print("key being processed: ", key)
             df = data[key]
@@ -285,13 +282,13 @@ class TranslationDataset(Dataset):
                 encoder_input = [l] + src + ["</s>"]
                 encoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in encoder_input]
 
-                decoder_input = trg + ["</s>"]
+                decoder_input = [l] + trg + ["</s>"]
                 decoder_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in decoder_input]
 
-                target = decoder_input[1:] + [l]  # Add random token to end to ensure deocder input length = target length
+                target = decoder_input[1:] + [
+                    l]  # Add random token to end to ensure deocder input length = target length
                 target_ids = [self.vocab.get(token, self.vocab['<unk>']) for token in target]
 
-        
                 self.corpus_encoder_ids.append(torch.tensor(encoder_ids))
                 self.corpus_decoder_ids.append(torch.tensor(decoder_ids))
                 self.corpus_target_ids.append(torch.tensor(target_ids))
@@ -301,14 +298,14 @@ class TranslationDataset(Dataset):
         if entity_data:
             self.entity_ids = []
 
-
             for key in lang_processing_order:
                 print("key being processed: ", key)
-                df = entity_data[key] # The koreans are pissing this off (🇰🇵)
-                source = df["source"] # source is going to be like ["Be yon ce", "Dens tiny Child"]
-                target = df["target"] # target is going to be like ["Be yon ce", "Hi jo de Des tino"]
+                df = entity_data[key]  # The koreans are pissing this off (🇰🇵)
+                source = df["source"]  # source is going to be like ["Be yon ce", "Dens tiny Child"]
+                target = df["target"]  # target is going to be like ["Be yon ce", "Hi jo de Des tino"]
 
-                for s, t in zip(source, target): # Note: this will only be the entity data, (source and target translations for just the entity)
+                for s, t in zip(source,
+                                target):  # Note: this will only be the entity data, (source and target translations for just the entity)
 
                     full_sentence = []
                     if len(s) != len(t):
@@ -317,14 +314,18 @@ class TranslationDataset(Dataset):
                         print(s)
                         print("\n")
                     for entity_index in range(len(s)):
+                        s_val = s[entity_index]
+                        t_val = t[entity_index]
 
-                        s_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in s[entity_index]]
-                        t_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in t[entity_index]]
+                        if "НИЧЕГО" in s_val or "НИЧЕГО" in t_val:
+            
+                            entity_sentence = ""
+                        else:
+                            s_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in s[entity_index]]
+                            t_tokens = [self.vocab.get(token, self.vocab['<unk>']) for token in t[entity_index]]
 
-
-
-                        entity_sentence = [self.vocab["[ent_info]"]] + s_tokens + [self.vocab["->"]] + t_tokens # creates individual encodings and translations for each entity
-
+                            entity_sentence = [self.vocab["[ent_info]"]] + s_tokens + [self.vocab[
+                                                                                       "->"]] + t_tokens  # creates individual encodings and translations for each entity
 
                         # example ["[ent_info]", "Be", "yon", "ce" "->", "Be", "yon", "ce" ]
                         # example ["[ent_info]", "Dens", "tiny", "Child" "->", "Hi", "jo", "de", "Des", "tino"]
@@ -340,28 +341,43 @@ class TranslationDataset(Dataset):
             print("we are merging entities with inputs")
             print("\n\n❤️😍😘BABY DOLL START PAYING ATTENTION ❤️😍😘❤️😍😘❤️😍😘\n")
             print("🥭🥭ORIGINAL SHAPE OF FIRST ENCODER ID")
-            print(self.corpus_encoder_ids[0].shape)
+            print(self.corpus_encoder_ids[18000].shape)
             string = ""
-            for x in self.corpus_encoder_ids[0]:
+            for x in self.corpus_encoder_ids[18000]:
                 string += self.inverse_vocab[x.item()]
             print(string)
 
             print("🥭🥭ORIGINAL SHAPE OF FIRST ENTITY ID")
-            print(self.entity_ids[0].shape)
+            print(self.entity_ids[18000].shape)
             string = ""
-            for x in self.entity_ids[0]:
-                string += self.inverse_vocab[x.item()] 
+            for x in self.entity_ids[18000]:
+                string += self.inverse_vocab[x.item()]
             print(string)
 
             self.corpus_encoder_ids = [
                 torch.cat((c, e), dim=-1) for c, e in zip(self.corpus_encoder_ids, self.entity_ids)
             ]
             print("🥭🥭AFTER SHAPE OF FIRST ENCODER ID")
-            print(self.corpus_encoder_ids[0].shape)
+            print(self.corpus_encoder_ids[18000].shape)
             string = ""
-            for x in self.corpus_encoder_ids[0]:
+            for x in self.corpus_encoder_ids[18000]:
                 string += self.inverse_vocab[x.item()]
             print(string)
+
+            print("🥭🥭AFTER SHAPE OF FIRST DECODER ID")
+            print(self.corpus_decoder_ids[18000].shape)
+            string = ""
+            for x in self.corpus_decoder_ids[18000]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
+
+            print("🥭🥭AFTER SHAPE OF FIRST TARGET ID")
+            print(self.corpus_target_ids[18000].shape)
+            string = ""
+            for x in self.corpus_target_ids[18000]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
+
         # Shuffle data from all languages
         if self.entity_ids is not None:
             paired_data = list(
@@ -381,16 +397,15 @@ class TranslationDataset(Dataset):
 
         # Convert from iter data type to list data type
         self.corpus_encoder_ids, self.corpus_decoder_ids, self.corpus_target_ids, self.corpus_y_mask = list(
-        self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
-        self.corpus_y_mask)
+            self.corpus_encoder_ids), list(self.corpus_decoder_ids), list(self.corpus_target_ids), list(
+            self.corpus_y_mask)
 
         if self.entity_ids:
             self.entity_ids = list(self.entity_ids)
 
-    
-    def make_sure_everythings_alligned_properly(self, train = False):
+    def make_sure_everythings_alligned_properly(self, train=False):
         print("making sure everything looks good in the dataset")
-        random_index = random.randint(0, len(self.corpus_encoder_ids) - 1) # to get a random sample from the data
+        random_index = random.randint(0, len(self.corpus_encoder_ids) - 1)  # to get a random sample from the data
         print("fetching data at random index: ", random_index)
         encoder = self.corpus_encoder_ids[random_index]
         decoder = self.corpus_decoder_ids[random_index]
@@ -398,7 +413,8 @@ class TranslationDataset(Dataset):
         mask = self.corpus_y_mask[random_index]
         if train is False:
             print("\n====== CHECKING LENGTHS =====")
-            print("encoder_ids: ", len(encoder), "decoder_ids: ", len(decoder), "target_ids: ", len(target), "mask_ids: ", len(mask))
+            print("encoder_ids: ", len(encoder), "decoder_ids: ", len(decoder), "target_ids: ", len(target),
+                  "mask_ids: ", len(mask))
             if len(encoder) != len(decoder):
                 print("\n====== MISMATCH FOUND ======")
                 print("encoder and decoder lengths do not match!")
@@ -410,26 +426,28 @@ class TranslationDataset(Dataset):
                     if real_encoder != real_decoder:
                         print(f"Encoder: {real_encoder} | Decoder: {real_decoder}")
 
-        #print("\n======= numerical values ======")
-        #print("\nencoder_ids: ", encoder, "\ndecoder_ids: ", decoder, "\ntarget_ids: ", target, "\nmask_ids: ", mask)
+        # print("\n======= numerical values ======")
+        # print("\nencoder_ids: ", encoder, "\ndecoder_ids: ", decoder, "\ntarget_ids: ", target, "\nmask_ids: ", mask)
 
-        real_encoder = [self.inverse_vocab.get(token.item(),  "<unk>") for token in encoder]
+        real_encoder = [self.inverse_vocab.get(token.item(), "<unk>") for token in encoder]
         real_decoder = [self.inverse_vocab.get(token.item(), "<unk>") for token in decoder]
         real_target = [self.inverse_vocab.get(token.item(), "<unk>") for token in target]
 
         print("\n======= decoded values =======")
         print("\nencoder: ", real_encoder, "\ndecoder: ", real_decoder, "\ntarget: ", real_target,
-                "\nmask: ", mask)
+              "\nmask: ", mask)
 
     def __len__(self):
         return len(self.corpus_encoder_ids)
 
     def __getitem__(self, idx):
         if self.entity_ids:
-            return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], self.corpus_y_mask[idx], self.entity_ids[idx]
+            return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], \
+            self.corpus_y_mask[idx], self.entity_ids[idx]
 
         else:
-            return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], self.corpus_y_mask[idx]
+            return self.corpus_encoder_ids[idx], self.corpus_decoder_ids[idx], self.corpus_target_ids[idx], \
+            self.corpus_y_mask[idx]
 
 
 pretrain_list = []
@@ -439,12 +457,13 @@ for filename in os.listdir(folder_path):
     if filename.endswith(".csv"):
         file_path = os.path.join(folder_path, filename)
         df = pd.read_csv(file_path)
-        pretrain_list.append(df)  
-        
+        pretrain_list.append(df)
 
-def get_semeval_train(just_get_lines = False): # knowing the lines will be used to check if the entities line up with the train dfs
+
+def get_semeval_train(
+        just_get_lines=False):  # knowing the lines will be used to check if the entities line up with the train dfs
     semeval_train = {}
-    rows_per_df = [] # once again, this will help us detect misallignments between the semeval data and the entity files
+    rows_per_df = []  # once again, this will help us detect misallignments between the semeval data and the entity files
     base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_train")
 
     # code adapted from pretrain.py with minor modifications
@@ -453,11 +472,10 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
         jsonl_file_path = os.path.join(base_dir, file)
 
         # check if the path is a language folder
-        lang_name = file.split("_")[0] #Tucker Carlson levels of hackyness
+        lang_name = file.split("_")[0]  # Tucker Carlson levels of hackyness
         print("train lang name: ", lang_name)
         try:
             with open(jsonl_file_path, "r", encoding="utf-8") as jsonl_file:
-
 
                 lines = list(jsonl_file)
                 rows_per_df.append(len(lines))
@@ -473,18 +491,17 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
                 df["target"] = df["target"].apply(lambda text: sp.encode(text, out_type=str))
 
                 semeval_train[lang_name] = df
-                
-        except:
-            print(f"🙈🙈🙈 WHOOPSIE DASIE 🙈🙈🙈\nFile: {file} is cursed. Consider casting a spell to counter\nYou are fine if this is the .DS_STORE")
 
+        except:
+            print(
+                f"🙈🙈🙈 WHOOPSIE DASIE 🙈🙈🙈\nFile: {file} is cursed. Consider casting a spell to counter\nYou are fine if this is the .DS_STORE")
 
     # Get val datasets for the missing languages
     val_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
     exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
     if os.path.isdir(val_dir):
-        for file_name in os.listdir(val_dir): 
+        for file_name in os.listdir(val_dir):
             base_name = os.path.splitext(file_name)[0]
-
 
             if base_name in exceptions:
                 lang_name = base_name.split("_")[0]
@@ -492,11 +509,11 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
 
                 json_file_path = os.path.join(val_dir, file_name)
                 with open(json_file_path, "r", encoding="utf-8") as jsonl_file:
-
                     lines = list(jsonl_file)
                     rows_per_df.append(len(lines))
 
-                    data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if "targets" in json.loads(line)]
+                    data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if
+                                   "targets" in json.loads(line)]
                     data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
                     target_locale = ["<" + base_name.split("_")[0] + ">" for line in lines]
 
@@ -507,21 +524,21 @@ def get_semeval_train(just_get_lines = False): # knowing the lines will be used 
 
                     semeval_train[lang_name] = df
 
-
-
     if just_get_lines:
         return rows_per_df
     else:
         return semeval_train
-    
-def get_semeval_val(just_get_lines = False): # knowing the lines will be used to check if the entities line up with the train dfs
+
+
+def get_semeval_val(
+        just_get_lines=False):  # knowing the lines will be used to check if the entities line up with the train dfs
     semeval_val = {}
-    rows_per_df = [] # once again, this will help us detect misallignments between the semeval data and the entity files
+    rows_per_df = []  # once again, this will help us detect misallignments between the semeval data and the entity files
     base_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
-    
+
     exceptions = ["ko_KR", "th_TH", "tr_TR", "zh_TW"]
     if os.path.isdir(base_dir):
-        for file_name in os.listdir(base_dir): 
+        for file_name in os.listdir(base_dir):
             base_name = os.path.splitext(file_name)[0]
 
             if base_name not in exceptions:
@@ -529,11 +546,11 @@ def get_semeval_val(just_get_lines = False): # knowing the lines will be used to
                 print("lang_name in val: ", lang_name)
                 json_file_path = os.path.join(base_dir, file_name)
                 with open(json_file_path, "r", encoding="utf-8") as jsonl_file:
-
                     lines = list(jsonl_file)
                     rows_per_df.append(len(lines))
 
-                    data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if "targets" in json.loads(line)]
+                    data_target = [json.loads(line)["targets"][0]["translation"] for line in lines if
+                                   "targets" in json.loads(line)]
                     data_source = [json.loads(line)["source"] for line in lines if "source" in json.loads(line)]
                     target_locale = ["<" + base_name.split("_")[0] + ">" for line in lines]
 
@@ -549,8 +566,9 @@ def get_semeval_val(just_get_lines = False): # knowing the lines will be used to
     else:
         return semeval_val
 
-def get_entity_info(just_get_lines = False, train=True):
-    get_lang = lambda x: x.split('.')[0] #cheeky ass mf lambda (report lambda abuse)
+
+def get_entity_info(just_get_lines=False, train=True):
+    get_lang = lambda x: x.split('.')[0]  # cheeky ass mf lambda (report lambda abuse)
     entity_info = {}
     num_rows = []
 
@@ -561,15 +579,20 @@ def get_entity_info(just_get_lines = False, train=True):
 
     sp = spm.SentencePieceProcessor(model_file="tokenizer/tokenizer_combined.model")
 
-    def add_lang_to_ent_info(lang, file): #subprocess to add our language to the ent info for DRY
-        df = pd.read_csv(file) #load csv 
-        num_rows.append(df.shape[0]) #idk this was in the old loop so i kept it but seems not needed unless "just_get_lines = true"
-        df["source"] = df["source"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")]) 
-        df["target"] = df["target"].apply(lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
+    def add_lang_to_ent_info(lang, file):  # subprocess to add our language to the ent info for DRY
+        df = pd.read_csv(file)  # load csv
+        df["source"] = df["source"].fillna("НИЧЕГО")
+        df["target"] = df["target"].fillna("НИЧЕГО")
+        num_rows.append(df.shape[
+                            0])  # idk this was in the old loop so i kept it but seems not needed unless "just_get_lines = true"
+        df["source"] = df["source"].apply(
+            lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
+        df["target"] = df["target"].apply(
+            lambda text: [sp.encode(entity, out_type=str) for entity in str(text).split("*|*")])
 
-        entity_info[lang] = df 
+        entity_info[lang] = df
 
-    for df_name in os.listdir(base_dir): #main loop
+    for df_name in os.listdir(base_dir):  # main loop
         try:
             print("entity df name: ", df_name)
             csv_file_path = os.path.join(base_dir, df_name)
@@ -577,21 +600,22 @@ def get_entity_info(just_get_lines = False, train=True):
 
             add_lang_to_ent_info(entity_lang, csv_file_path)
         except:
-            print(f'👺 YOU FUCKED UP\nBURN IN HELL🔥🔥🔥\n' if df_name.find('.DS') == -1 else f'Calmate\nNo real problem') #if 
+            print(f'👺 YOU FUCKED UP\nBURN IN HELL🔥🔥🔥\n' if df_name.find(
+                '.DS') == -1 else f'Calmate\nNo real problem')  # if
 
-    if train: #if training we want these validation entity files 
+    if train:  # if training we want these validation entity files
         val_path = path('data/entity_info/val')
         needed = set(['ko.csv', 'th.csv', 'tr.csv', 'zh.csv'])
-        for file in os.listdir(val_path): #iterate over validation entity files 
-            if file in needed: #grab needed ones
-                lang = get_lang(file) 
+        for file in os.listdir(val_path):  # iterate over validation entity files
+            if file in needed:  # grab needed ones
+                lang = get_lang(file)
                 add_lang_to_ent_info(lang, f'{val_path}/{file}')
 
-    
     if just_get_lines:
         return num_rows
     else:
         return entity_info
+
 
 def make_dummy_entity_data(train=True):
     """
@@ -639,7 +663,8 @@ def collate_fn(batch):
     mask = [item[3] for item in batch]
 
     # set batch_first to True to make the batch size first dim
-    padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
+    padded_en_in = pad_sequence(encoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab[
+        "<PAD>"])  # does not matter if semeval or pretrain, should be the same vocab
     padded_de_in = pad_sequence(decoder_input, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_de_out = pad_sequence(decoder_output, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
     padded_mask = pad_sequence(mask, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
@@ -654,14 +679,14 @@ def collate_fn(batch):
     if entities is not None:
         padded_entities = pad_sequence(entities, batch_first=True, padding_value=semeval_train_dataset.vocab["<PAD>"])
         return padded_en_in, padded_de_in, padded_de_out, padded_mask, padded_entities
-    
+
     else:
         return padded_en_in, padded_de_in, padded_de_out, padded_mask
 
 
 # Encode and load pretrain data
-#make_dummy_entity_data(train= True)
-#make_dummy_entity_data(train= False)
+# make_dummy_entity_data(train= True)
+# make_dummy_entity_data(train= False)
 semeval_train = get_semeval_train()
 semeval_val = get_semeval_val()
 entities_train = get_entity_info()
@@ -670,9 +695,6 @@ print("printing entity head")
 for key in entities_train:
     print("key in entity train")
     print(key)
-
-
-
 
 print("running pretrain")
 
@@ -689,26 +711,23 @@ pretrain_dataset.make_sure_everythings_alligned_properly()
 # Encode and load train data
 print("running train")
 
-
 semeval_train_dataset = TranslationDataset()
 semeval_val_dataset = TranslationDataset()
 
 semeval_train_dataset.load_vocab(pretrain_dataset.vocab)
 semeval_val_dataset.load_vocab(pretrain_dataset.vocab)
 
+semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train)  # Problem child ATM
 
-semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train) #Problem child ATM 
-
-entities_val = get_entity_info(train = False)
+entities_val = get_entity_info(train=False)
 print("printing entity head")
 for key in entities_val:
     print("key in entity val")
     print(key)
-semeval_val_dataset.encode_semeval(semeval_val, train = False) # NOTE: need to add val entities
+semeval_val_dataset.encode_semeval(semeval_val, train=False)  # NOTE: need to add val entities
 
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
-
 
 # print("🟥🟥testing a random encoder id:")
 # test_string = ""
