@@ -82,20 +82,23 @@ def get_semeval_data(base_dir, for_bpe=False):
 
         if os.path.isfile(file_path):
             with open(file_path, "r", encoding="utf-8") as jsonl_file:
+                folder_name = file_name.split("_")[0]
+                print(folder_name)
+                if folder_name != ".DS":
+                    if for_bpe:
+                        data_target = [json.loads(line)["target"] for line in jsonl_file if
+                                       "target" in json.loads(line)]  # only gets the line with the translation
+                        data_source = [json.loads(line)["source"] for line in jsonl_file if
+                                       "source" in json.loads(line)]
+                        combined_data = data_target + data_source
 
-                if for_bpe:
-                    data_target = [json.loads(line)["target"] for line in jsonl_file if "target" in json.loads(line)] # only gets the line with the translation
-                    data_source = [json.loads(line)["source"] for line in jsonl_file if
-                                    "source" in json.loads(line)]
-                    combined_data = data_target + data_source
+                        df = pd.DataFrame({"text": combined_data})
 
-                    df = pd.DataFrame({"text": combined_data})
+                    else:
+                        data = [json.loads(line) for line in jsonl_file]
+                        df = pd.DataFrame(data)
 
-                else:
-                    data = [json.loads(line) for line in jsonl_file]
-                    df = pd.DataFrame(data)
-
-                semeval_train[folder_name] = df
+                    semeval_train[folder_name] = df
 
     # Get val datasets for the missing languages
     val_dir = os.path.join(os.path.dirname(__file__), "data/semeval_val")
