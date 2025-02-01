@@ -1,10 +1,15 @@
-from dataset import pretrain_dataset, semeval_train_dataset, semeval_val_dataset, semeval_train_loader, semeval_val_loader, pretrain_train_loader, pretrain_val_loader
-import os
-import torch
+#3rd party imports
 from torch import nn
 from torch import optim
-from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
+import torch
+#standard lib
+import os
 import sys
+#our imports
+from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
+from dataset import pretrain_dataset, semeval_train_dataset, semeval_val_dataset, semeval_train_loader, semeval_val_loader, pretrain_train_loader, pretrain_val_loader
+from config import MODEL_CONFIG
+from util_funcs import find_max_sequence_length
 
 """
 entity_info should be batches of entities, corresponding to the input data
@@ -12,20 +17,7 @@ entity_info should be batches of entities, corresponding to the input data
 
 # Note: entities_in_self_attn is a flag ONLY for our fourth experiment. It just adds an if-else statement in the decoder to not use entities during self attention
 vocab_size = len(pretrain_dataset.vocab)
-# in order to set the proper size for max seq length for our positional embeddings
-def find_max_sequence_length(dataset, entity= False): # if entity == True, it will return the max entitry length
-    if entity:
-        if dataset.entity_ids != None:
 
-            longest_entity = max(len(ids) for ids in dataset.entity_ids)
-            return longest_entity
-    else:
-        for ids in dataset.corpus_encoder_ids:
-            print(len(ids))
-        encoder_max = max(len(ids) for ids in dataset.corpus_encoder_ids)
-        decoder_max = max(len(ids) for ids in dataset.corpus_decoder_ids)
-        target_max = max(len(ids) for ids in dataset.corpus_target_ids)
-        return max(encoder_max, decoder_max, target_max)
 
 max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
 max_seq_len_train = find_max_sequence_length(dataset=semeval_train_dataset)
@@ -51,9 +43,9 @@ else:
         entity_len = 10
 
 
-n_embd = 128
-n_head = 4
-n_layer = 4
+n_embd = MODEL_CONFIG['n_embd']
+n_head = MODEL_CONFIG['n_head']
+n_layer = MODEL_CONFIG['n_layer']
 
 def check_gradients(model):
     max_norm = 0
