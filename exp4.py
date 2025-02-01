@@ -5,6 +5,8 @@ from torch import nn
 from torch import optim
 from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
 import sys
+from config import MODEL_CONFIG
+from util_funcs import find_max_sequence_length
 
 #### Attention: This experiment is where the encoder uses no embeddings but the decoder creates embeddings and uses them for self attention and cross attention
 
@@ -12,20 +14,6 @@ import sys
 entity_info should be batches of entities, corresponding to the input data
 """
 vocab_size = len(pretrain_dataset.vocab)
-# in order to set the proper size for max seq length for our positional embeddings
-def find_max_sequence_length(dataset, entity= False): # if entity == True, it will return the max entitry length
-    if entity:
-        if dataset.entity_ids != None:
-
-            longest_entity = max(len(ids) for ids in dataset.entity_ids)
-        return longest_entity
-    else:
-        for ids in dataset.corpus_encoder_ids:
-            print(len(ids))
-        encoder_max = max(len(ids) for ids in dataset.corpus_encoder_ids)
-        decoder_max = max(len(ids) for ids in dataset.corpus_decoder_ids)
-        target_max = max(len(ids) for ids in dataset.corpus_target_ids)
-        return max(encoder_max, decoder_max, target_max)
 
 max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
 max_seq_len_train = find_max_sequence_length(dataset=semeval_train_dataset)
@@ -36,9 +24,10 @@ entity_len_val = find_max_sequence_length(dataset=semeval_val_dataset, entity = 
 
 entity_len = max(entity_len_train, entity_len_val)
 
-n_embd = 512
-n_head = 4
-n_layer = 6
+n_embd = MODEL_CONFIG['n_embd']
+n_head = MODEL_CONFIG['n_head']
+n_layer = MODEL_CONFIG['n_layer']
+
 
 def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encoder_path, pretrain_decoder_path, train_encoder_path=None, train_decoder_path=None, train=False):
     pos = PositionalEmbedding(n_embd)
