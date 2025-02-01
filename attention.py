@@ -57,14 +57,14 @@ class EncoderLayers(nn.Module):
         Function gives option to include entity embeddings for experimentation
         """
         super().__init__()
-        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.2)
+        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
 
         # for self attention in encoder
         self.Enorm1 = nn.LayerNorm(n_embd)
         self.Enorm2 = nn.LayerNorm(n_embd)
 
         # feedforward layers with .3 dropout for regularization
-        self.EncoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.GELU(), nn.Dropout(0.3),
+        self.EncoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
                                                 nn.Linear(4 * n_embd, n_embd))
 
     # gets self attention for self. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
@@ -102,14 +102,14 @@ class DecoderLayers(nn.Module):
     """
     def __init__(self, n_embd, n_head):
         super().__init__()
-        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.2)
+        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
 
         # for self attention in decoder
         self.Dnorm1 = nn.LayerNorm(n_embd)
         self.Dnorm2 = nn.LayerNorm(n_embd)
 
         # feedforward layer with .3 dropout for regularization
-        self.DecoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(), nn.Dropout(0.3),
+        self.DecoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
                                                 nn.Linear(4 * n_embd, n_embd))
 
     # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
@@ -156,14 +156,14 @@ class CrossAttentionBlock(nn.Module):
     def __init__(self, n_embd, n_head):
         super().__init__()
 
-        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.2)
+        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
 
         # for cross attention
         self.Cnorm1 = nn.LayerNorm(n_embd)
         self.Cnorm2 = nn.LayerNorm(n_embd)
 
         # feedforward layer with .3 dropout for regularization
-        self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.GELU(), nn.Dropout(0.3),
+        self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
                                               nn.Linear(4 * n_embd, n_embd))
     
     def forward(self, decoder_input, encoder_output, pad_mask, entity_embeddings=None):
