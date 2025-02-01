@@ -18,7 +18,6 @@ entity_info should be batches of entities, corresponding to the input data
 # Note: entities_in_self_attn is a flag ONLY for our fourth experiment. It just adds an if-else statement in the decoder to not use entities during self attention
 vocab_size = len(pretrain_dataset.vocab)
 
-
 max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
 max_seq_len_train = find_max_sequence_length(dataset=semeval_train_dataset)
 max_seq_len_val = find_max_sequence_length(dataset=semeval_val_dataset)
