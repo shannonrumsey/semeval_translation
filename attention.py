@@ -57,7 +57,7 @@ class EncoderLayers(nn.Module):
         Function gives option to include entity embeddings for experimentation
         """
         super().__init__()
-        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
+        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.1)
 
         # for self attention in encoder
         self.Enorm1 = nn.LayerNorm(n_embd)
@@ -81,9 +81,9 @@ class EncoderLayers(nn.Module):
         if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,:]  # this will return our vector to (batch size, seq len, embedding dim)
 
-        x = self.Enorm1(x + attn_output) # resid connection and
-        feedforward_output = self.EncoderFeedforward(x)
-        x = self.Enorm2(x + feedforward_output)
+        norm = self.Enorm1(x + attn_output) # resid connection and
+        feedforward_output = self.EncoderFeedforward(norm)
+        x = x + feedforward_output
 
         return x
 
@@ -102,7 +102,7 @@ class DecoderLayers(nn.Module):
     """
     def __init__(self, n_embd, n_head):
         super().__init__()
-        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
+        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.1)
 
         # for self attention in decoder
         self.Dnorm1 = nn.LayerNorm(n_embd)
@@ -144,9 +144,9 @@ class DecoderLayers(nn.Module):
             attn_output = attn_output[:, :-len_entity,
                           :]  # this will return our vector to (batch size, seq len, embedding dim)
 
-        x = self.Dnorm1(x + attn_output)  # resid connection and layer norm
-        feedforward_output = self.DecoderFeedforward(x)
-        x = self.Dnorm2(x + feedforward_output)
+        norm = self.Dnorm1(x + attn_output)  # resid connection and layer norm
+        feedforward_output = self.DecoderFeedforward(norm)
+        x = x + feedforward_output
 
         return x
 
@@ -156,7 +156,7 @@ class CrossAttentionBlock(nn.Module):
     def __init__(self, n_embd, n_head):
         super().__init__()
 
-        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
+        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.1)
 
         # for cross attention
         self.Cnorm1 = nn.LayerNorm(n_embd)
@@ -181,9 +181,9 @@ class CrossAttentionBlock(nn.Module):
             # no need to remove the entity info because it was in the encoder. (only used as a key and not a query)
 
             # apply residual connection and normalization
-            x = self.Cnorm1(decoder_input + attn_output)
-            feedforward_output = self.CrossFeedforward(x)
-            x = self.Cnorm2(x + feedforward_output)
+            norm = self.Cnorm1(decoder_input + attn_output)
+            feedforward_output = self.CrossFeedforward(norm)
+            x = decoder_input + feedforward_output
 
             return x
 
