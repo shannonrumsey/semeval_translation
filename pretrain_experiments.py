@@ -50,8 +50,8 @@ else:
         entity_len = 10
 
 
-n_embd = 128
-n_head = 4
+n_embd = 512
+n_head = 8
 n_layer = 4
 
 def check_gradients(model):
@@ -85,7 +85,6 @@ def print_gradient_stats(model):
             grad_norm = param.grad.norm().item()
             print(f"{name} | Gradient Norm: {grad_norm:.6f}")
 
-
 def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encoder_path, pretrain_decoder_path, train_encoder_path=None, train_decoder_path=None, train=False):
     pos = PositionalEmbedding(n_embd)
     encoder = TransformerEncoder(vocab_size=vocab_size,
@@ -103,7 +102,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
     dec_optimizer = optim.AdamW(decoder.parameters(), lr=0.001)
-    
+
     if train:
         encoder_path = train_encoder_path
         decoder_path = train_decoder_path
@@ -117,7 +116,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 20
+    num_epoch = 50
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -173,8 +172,8 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
 
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm=1.0)
-            torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm=1)
+            torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1)
 
             # print("Encoder gradients")
             # # print_gradient_stats(encoder)
