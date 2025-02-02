@@ -263,6 +263,16 @@ class TranslationDataset(Dataset):
         Notes:
             - The resulting lists combines all of the languages together and shuffles them to prevent patterns like en en..., es es..., it it...
         """
+        def lazy_debug(idx):
+            try:
+                print(self.corpus_encoder_ids[idx].shape)
+                string = ""
+                for x in self.corpus_encoder_ids[idx]:
+                    string += self.inverse_vocab[x.item()]
+                print(string)
+            except:
+                print(f'error accessing index: {idx}')
+        
         if train:
             lang_processing_order = ["ar", "de", "es", "fr", "it", "ja", "ko", "th", "tr", "zh"]
         else:  # for val, we only use the languages we have val on
@@ -338,9 +348,11 @@ class TranslationDataset(Dataset):
 
         # concatinates entity info to the encoder if entity info is present
         if self.entity_ids is not None:
+            idx = len(self.entity_ids) - 1 #get max - 1 so we never trigger an error here even in val
             print("we are merging entities with inputs")
             print("\n\n❤️😍😘BABY DOLL START PAYING ATTENTION ❤️😍😘❤️😍😘❤️😍😘\n")
             print("🥭🥭ORIGINAL SHAPE OF FIRST ENCODER ID")
+
             print(self.corpus_encoder_ids[600].shape)
             string = ""
             for x in self.corpus_encoder_ids[600]:
@@ -354,10 +366,16 @@ class TranslationDataset(Dataset):
                 string += self.inverse_vocab[x.item()]
             print(string)
 
+
+
+            print("🥭🥭ORIGINAL SHAPE OF FIRST ENTITY ID")
+
+
             self.corpus_encoder_ids = [
                 torch.cat((c, e), dim=-1) for c, e in zip(self.corpus_encoder_ids, self.entity_ids)
             ]
             print("🥭🥭AFTER SHAPE OF FIRST ENCODER ID")
+
             print(self.corpus_encoder_ids[600].shape)
             string = ""
             for x in self.corpus_encoder_ids[600]:
@@ -377,6 +395,7 @@ class TranslationDataset(Dataset):
             for x in self.corpus_target_ids[600]:
                 string += self.inverse_vocab[x.item()]
             print(string)
+
 
         # Shuffle data from all languages
         if self.entity_ids is not None:
@@ -685,19 +704,13 @@ def collate_fn(batch):
 
 
 # Encode and load pretrain data
-# make_dummy_entity_data(train= True)
-# make_dummy_entity_data(train= False)
 semeval_train = get_semeval_train()
 semeval_val = get_semeval_val()
 entities_train = get_entity_info()
+entities_val = get_entity_info(train=False)
 
-print("printing entity head")
-for key in entities_train:
-    print("key in entity train")
-    print(key)
 
 print("running pretrain")
-
 pretrain_dataset = TranslationDataset()
 pretrain_dataset.make_vocab(pretrain_list, semeval_train, entities_train, semeval_val)
 pretrain_dataset.encode_pretrain(pretrain_list)
@@ -719,12 +732,14 @@ semeval_val_dataset.load_vocab(pretrain_dataset.vocab)
 
 semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train)  # Problem child ATM
 
+
 entities_val = get_entity_info(train=False)
 print("printing entity head")
 for key in entities_val:
     print("key in entity val")
     print(key)
 semeval_val_dataset.encode_semeval(semeval_val, entity_data =entities_val,  train=False)  # NOTE: need to add val entities
+
 
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
