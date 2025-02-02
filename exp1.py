@@ -45,7 +45,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
-    dec_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
+    dec_optimizer = optim.AdamW(decoder.parameters(), lr=0.001)
     
     if train:
         encoder_path = train_encoder_path
@@ -76,13 +76,13 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             elif len(batch) == 5: # we have entity info
                 encoder_input, decoder_input, target, mask, entity_info = batch
 
-            encoder_input = encoder_input.to(device)
+            encoder_input = encoder_input.long().to(device)
 
-            decoder_input = decoder_input.to(device)
-            target = target.to(device)
+            decoder_input = decoder_input.long().to(device)
+            target = target.long().to(device)
             mask = mask.to(device)
             if entity_info is not None:
-                entity_info = entity_info.to(device)
+                entity_info = entity_info.long().to(device)
             else:
                 entity_info = None
 
@@ -118,13 +118,13 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 elif len(batch) == 5: # we have entity info
                     encoder_input, decoder_input, target, mask, entity_info = batch
 
-                encoder_input = encoder_input.to(device)
-                decoder_input = decoder_input.to(device)
-                target = target.to(device)
-                mask = mask.to(device)
+                encoder_input = encoder_input.long().to(device)
 
+                decoder_input = decoder_input.long().to(device)
+                target = target.long().to(device)
+                mask = mask.to(device)
                 if entity_info is not None:
-                    entity_info = entity_info.to(device)
+                    entity_info = entity_info.long().to(device)
                 else:
                     entity_info = None
 
@@ -143,13 +143,82 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 torch.save(encoder.state_dict(), encoder_path)
                 torch.save(decoder.state_dict(), decoder_path)
                 prev_loss = total_val_loss
+            target_tokens = target.tolist()
+            encoder_tokens = encoder_input.tolist()
+            EXCLUDE_TOKENS = {"_", "</s>", "<PAD>"}  
+            exclude_indices = {idx for idx, token in pretrain_dataset.inverse_vocab.items() if token in EXCLUDE_TOKENS}
 
+            masked_outputs = decoder_outputs.clone()
+
+            for idx in exclude_indices:
+                masked_outputs[:, :, idx] = float('-inf')
+
+    
+            pred_tokens = masked_outputs.argmax(dim=-1).tolist()
+            _, top_indices = masked_outputs.topk(2, dim=-1)
+            second_max_indices = top_indices[:, :, 1]
+            second_pred_tokens = second_max_indices.tolist()
+
+
+            
+
+            print("\n\n🍋🍋 with highest 🍋🍋")
+            for i in range(min(5, len(pred_tokens))):
+                pred_sentence = " ".join([
+                    pretrain_dataset.inverse_vocab[token]
+                    for token in pred_tokens[i] if token in pretrain_dataset.inverse_vocab
+                ])
+
+                target_sentence = " ".join([
+                    pretrain_dataset.inverse_vocab[token]
+                    for token in target_tokens[i] if token in pretrain_dataset.inverse_vocab
+                ])
+                encoder_sentence = " ".join([pretrain_dataset.inverse_vocab[token] for token in encoder_tokens[i] if token in pretrain_dataset.inverse_vocab])
+
+                print(f"predicted {i+1}: {pred_sentence}")
+                print(f"target {i+1}: {target_sentence}\n")
+                print(f"encoder {i+1}: {encoder_sentence}\n")
         
 pretrain_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/pretrain_encoder_model")
 pretrain_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/pretrain_decoder_model")
 train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_encoder_model_exp1")
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model_exp1")
 
+def extend_embedding(embedding, target_size, scale=0.01):
+    current_size, dim = embedding.shape
+    if current_size < target_size:
+        additional_weights = torch.randn(target_size - current_size, dim, device=device, dtype=torch.float32) * scale
+        embedding = torch.cat([embedding, additional_weights], dim=0)
+    return embedding
+
+
+
+encoder = torch.load("trained_models/pretrain_encoder_model", map_location=device)
+decoder = torch.load("trained_models/pretrain_decoder_model", map_location=device)
+print("printing original dtype")
+print(encoder["pos_embedding.pos_embedding.weight"].dtype)
+
+encoder["pos_embedding.pos_embedding.weight"] = extend_embedding(encoder["pos_embedding.pos_embedding.weight"], max_seq_len)
+encoder["entity_pos_embedding.pos_embedding.weight"] = extend_embedding(encoder["entity_pos_embedding.pos_embedding.weight"], entity_len)
+
+decoder["pos_embedding.pos_embedding.weight"] = extend_embedding(decoder["pos_embedding.pos_embedding.weight"], max_seq_len)
+decoder["entity_pos_embedding.pos_embedding.weight"] = extend_embedding(decoder["entity_pos_embedding.pos_embedding.weight"], entity_len)
+
+
+torch.save(encoder, "trained_models/pretrain_encoder_model_extended")
+torch.save(decoder, "trained_models/pretrain_decoder_model_extended")
+pretrain_encoder_path = "trained_models/pretrain_encoder_model_extended"
+pretrain_decoder_path = "trained_models/pretrain_decoder_model_extended"
+
+
+
+
+
+for name, param in encoder.items():
+    print(f"Encoder - {name}: {param.shape}")
+
+for name, param in decoder.items():
+    print(f"Decoder - {name}: {param.shape}")
 # Pretrain model
 # run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
 #           val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
