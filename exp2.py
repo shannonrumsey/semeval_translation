@@ -14,6 +14,10 @@ entity_info should be batches of entities, corresponding to the input data
 """
 vocab_size = len(pretrain_dataset.vocab)
 
+pretrain_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/pretrain_encoder_model")
+pretrain_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/pretrain_decoder_model")
+train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_encoder_model_exp2")
+train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model_exp2")
 
 max_seq_len_pretrain = find_max_sequence_length(dataset=pretrain_dataset)
 max_seq_len_train = find_max_sequence_length(dataset=semeval_train_dataset)
@@ -24,7 +28,13 @@ entity_len_val = find_max_sequence_length(dataset=semeval_val_dataset, entity = 
 
 entity_len = max(entity_len_train, entity_len_val)
 
-n_embd = MODEL_CONFIG['n_embd']
+# Check what values were used during pretraining
+print("Loading pretrained model with configuration:")
+pretrained_state = torch.load(pretrain_encoder_path)
+print(f"Pretrained model hidden size: {pretrained_state['attention_layers.0.CrossAttention.out_proj.weight'].size(0)}")
+
+# Adjust n_embd to match pretrained model
+n_embd = 128  # Update this to match pretrained model
 n_head = MODEL_CONFIG['n_head']
 n_layer = MODEL_CONFIG['n_layer']
 
@@ -68,23 +78,19 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         decoder.train()
 
         for batch in train_loader:
-
-            if len(batch) == 4: # we don;t have any entity info
+            if len(batch) == 4: # we don't have any entity info
                 encoder_input, decoder_input, target, mask = batch
                 entity_info = None
-
             elif len(batch) == 5: # we have entity info
                 encoder_input, decoder_input, target, mask, entity_info = batch
 
-            encoder_input = encoder_input.to(device)
-
-            decoder_input = decoder_input.to(device)
-            target = target.to(device)
+            # Convert inputs to long (integer) type
+            encoder_input = encoder_input.long().to(device)
+            decoder_input = decoder_input.long().to(device)
+            target = target.long().to(device)
             mask = mask.to(device)
             if entity_info is not None:
-                entity_info = entity_info.to(device)
-            else:
-                entity_info = None
+                entity_info = entity_info.long().to(device)
 
             enc_optimizer.zero_grad()
             dec_optimizer.zero_grad()
@@ -111,22 +117,20 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         decoder.eval()
         with torch.no_grad():
             for batch in val_loader:
-                if len(batch) == 4: # we don't have any entity info
+                if len(batch) == 4:
                     encoder_input, decoder_input, target, mask = batch
                     entity_info = None
-
-                elif len(batch) == 5: # we have entity info
+                elif len(batch) == 5:
                     encoder_input, decoder_input, target, mask, entity_info = batch
 
-                encoder_input = encoder_input.to(device)
-                decoder_input = decoder_input.to(device)
-                target = target.to(device)
+                # Convert inputs to long (integer) type prevents type error
+                encoder_input = encoder_input.long().to(device)
+                decoder_input = decoder_input.long().to(device)
+                target = target.long().to(device)
                 mask = mask.to(device)
 
                 if entity_info is not None:
-                    entity_info = entity_info.to(device)
-                else:
-                    entity_info = None
+                    entity_info = entity_info.long().to(device)
 
                 hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(encoder_input, entity_info=entity_info)
                 decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=entity_info, use_encoders_entities=False, entities_in_self_attn=True)
@@ -149,6 +153,27 @@ pretrain_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/
 pretrain_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/pretrain_decoder_model")
 train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_encoder_model_exp2")
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model_exp2")
+
+
+# Darian's extend function
+def extend_embedding(embedding, target_size, scale=0.01):
+    current_size, dim = embedding.shape
+    if current_size < target_size:
+        additional_weights = torch.randn(target_size - current_size, dim, device=device, dtype=torch.float32) * scale
+        embedding = torch.cat([embedding, additional_weights], dim=0)
+    return embedding
+encoder = torch.load("trained_models/pretrain_encoder_model", map_location=device)
+decoder = torch.load("trained_models/pretrain_decoder_model", map_location=device)
+print("printing original dtype")
+print(encoder["pos_embedding.pos_embedding.weight"].dtype)
+encoder["pos_embedding.pos_embedding.weight"] = extend_embedding(encoder["pos_embedding.pos_embedding.weight"], max_seq_len)
+encoder["entity_pos_embedding.pos_embedding.weight"] = extend_embedding(encoder["entity_pos_embedding.pos_embedding.weight"], entity_len)
+decoder["pos_embedding.pos_embedding.weight"] = extend_embedding(decoder["pos_embedding.pos_embedding.weight"], max_seq_len)
+decoder["entity_pos_embedding.pos_embedding.weight"] = extend_embedding(decoder["entity_pos_embedding.pos_embedding.weight"], entity_len)
+torch.save(encoder, "trained_models/pretrain_encoder_model_extended")
+torch.save(decoder, "trained_models/pretrain_decoder_model_extended")
+pretrain_encoder_path = "trained_models/pretrain_encoder_model_extended"
+pretrain_decoder_path = "trained_models/pretrain_decoder_model_extended"
 
 # Pretrain model
 # run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
