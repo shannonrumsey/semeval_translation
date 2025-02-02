@@ -10,7 +10,6 @@ from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, d
 from dataset import pretrain_dataset, semeval_train_dataset, semeval_val_dataset, semeval_train_loader, semeval_val_loader, pretrain_train_loader, pretrain_val_loader
 from config import MODEL_CONFIG
 from util_funcs import find_max_sequence_length
-
 """
 entity_info should be batches of entities, corresponding to the input data
 """
@@ -42,9 +41,9 @@ else:
         entity_len = 10
 
 
-n_embd = MODEL_CONFIG['n_embd']
-n_head = MODEL_CONFIG['n_head']
-n_layer = MODEL_CONFIG['n_layer']
+n_embd = 728
+n_head = 8
+n_layer = 12
 
 def check_gradients(model):
     max_norm = 0
@@ -91,6 +90,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 n_head=n_head,
                                 vocab_size=vocab_size,
                                 max_entity_len=entity_len).to(device)
+
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
@@ -109,7 +109,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 1
+    num_epoch = 10
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -165,15 +165,15 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
 
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm=1.0)
-            torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1.0)
+            torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm=1)
+            torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1)
 
             # print("Encoder gradients")
-            # # print_gradient_stats(encoder)
+            # print_gradient_stats(encoder)
             # check_gradients(encoder)
 
             # print("Decoder gradients")
-            # # print_gradient_stats(decoder)
+            # print_gradient_stats(decoder)
             # check_gradients(decoder)
 
             epoch_loss += loss.item()
