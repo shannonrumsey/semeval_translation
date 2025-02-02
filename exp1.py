@@ -29,6 +29,37 @@ n_head = MODEL_CONFIG['n_head']
 n_layer = MODEL_CONFIG['n_layer']
 
 
+def check_gradients(model):
+    max_norm = 0
+    min_norm = float('inf')
+    avg_norm = 0
+    num_params = 0
+
+    for param in model.parameters():
+        if param.grad is not None:
+            grad_norm = param.grad.norm().item()
+            max_norm = max(max_norm, grad_norm)
+            min_norm = min(min_norm, grad_norm)
+            avg_norm += grad_norm
+            num_params += 1
+
+    avg_norm /= max(num_params, 1)
+
+    print(f"Gradient Stats - Max: {max_norm:.4f}, Min: {min_norm:.4f}, Avg: {avg_norm:.4f}")
+
+    # Warnings for vanishing or exploding gradients
+    if max_norm > 5:
+        print("⚠️ Warning: Possible exploding gradients detected (Max norm > 5)!")
+    if min_norm < 1e-6:
+        print("⚠️ Warning: Possible vanishing gradients detected (Min norm < 1e-6)!")
+
+
+def print_gradient_stats(model):
+    for name, param in model.named_parameters():
+        if param.grad is not None:
+            grad_norm = param.grad.norm().item()
+            print(f"{name} | Gradient Norm: {grad_norm:.6f}")
+
 def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encoder_path, pretrain_decoder_path, train_encoder_path=None, train_decoder_path=None, train=False):
     pos = PositionalEmbedding(n_embd)
     encoder = TransformerEncoder(vocab_size=vocab_size,
@@ -98,6 +129,18 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             loss = loss_fn(decoder_outputs.view(-1, vocab_size), target.view(-1))
 
             loss.backward()
+
+            torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm=1)
+            torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1)
+
+            # print("Encoder gradients")
+            # # print_gradient_stats(encoder)
+            # check_gradients(encoder)
+
+            # print("Decoder gradients")
+            # # print_gradient_stats(decoder)
+            # check_gradients(decoder)
+
             epoch_loss += loss.item()
 
             enc_optimizer.step()
