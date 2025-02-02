@@ -2,3 +2,4 @@
 __pycache__/
 venv/trained_models/pretrain_encoder_model
 venv/
+notebooks/
