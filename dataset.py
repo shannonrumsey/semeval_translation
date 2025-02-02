@@ -352,22 +352,50 @@ class TranslationDataset(Dataset):
             print("we are merging entities with inputs")
             print("\n\n❤️😍😘BABY DOLL START PAYING ATTENTION ❤️😍😘❤️😍😘❤️😍😘\n")
             print("🥭🥭ORIGINAL SHAPE OF FIRST ENCODER ID")
-            lazy_debug(idx)
+
+            print(self.corpus_encoder_ids[600].shape)
+            string = ""
+            for x in self.corpus_encoder_ids[600]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
 
             print("🥭🥭ORIGINAL SHAPE OF FIRST ENTITY ID")
-            lazy_debug(idx)
+            print(self.entity_ids[600].shape)
+            string = ""
+            for x in self.entity_ids[600]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
+
+
+
+            print("🥭🥭ORIGINAL SHAPE OF FIRST ENTITY ID")
+
 
             self.corpus_encoder_ids = [
                 torch.cat((c, e), dim=-1) for c, e in zip(self.corpus_encoder_ids, self.entity_ids)
             ]
             print("🥭🥭AFTER SHAPE OF FIRST ENCODER ID")
-            lazy_debug(idx)
+
+            print(self.corpus_encoder_ids[600].shape)
+            string = ""
+            for x in self.corpus_encoder_ids[600]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
 
             print("🥭🥭AFTER SHAPE OF FIRST DECODER ID")
-            lazy_debug(idx)
+            print(self.corpus_decoder_ids[600].shape)
+            string = ""
+            for x in self.corpus_decoder_ids[600]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
 
             print("🥭🥭AFTER SHAPE OF FIRST TARGET ID")
-            lazy_debug(idx)
+            print(self.corpus_target_ids[600].shape)
+            string = ""
+            for x in self.corpus_target_ids[600]:
+                string += self.inverse_vocab[x.item()]
+            print(string)
+
 
         # Shuffle data from all languages
         if self.entity_ids is not None:
@@ -705,8 +733,13 @@ semeval_val_dataset.load_vocab(pretrain_dataset.vocab)
 semeval_train_dataset.encode_semeval(semeval_train, entity_data=entities_train)  # Problem child ATM
 
 
+entities_val = get_entity_info(train=False)
+print("printing entity head")
+for key in entities_val:
+    print("key in entity val")
+    print(key)
+semeval_val_dataset.encode_semeval(semeval_val, entity_data =entities_val,  train=False)  # NOTE: need to add val entities
 
-semeval_val_dataset.encode_semeval(semeval_val, entity_data=entities_val, train=False)  # NOTE: need to add val entities
 
 semeval_train_loader = DataLoader(semeval_train_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
 semeval_val_loader = DataLoader(semeval_val_dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
