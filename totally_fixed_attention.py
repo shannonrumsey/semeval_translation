@@ -136,13 +136,15 @@ class DecoderLayers(nn.Module):
         # Attention mask
         mask = torch.triu(torch.ones(x.shape[1] + len_entity, x.shape[1] + len_entity, device=device), diagonal= len_entity +1).bool()
 
-        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask)
+        
 
         if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,
                           :]  # this will return our vector to (batch size, seq len, embedding dim)
-
-        x = self.Dnorm1(x + attn_output)  # resid connection and layer norm
+        # using PRE LN
+        x_norm = self.Dnorm1(x_with_entity)  
+        attn_output, _ = self.DecoderAttention(x_norm, x_norm, x_norm, attn_mask=mask)
+        x = x + attn_output  # Residual connection
         
 
         return x
@@ -172,15 +174,22 @@ class CrossAttentionBlock(nn.Module):
 
             # get cross-attention 
             # (decoder query, encoder key & value)
-            attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,
-                                                 encoder_output_with_entity)
+            #attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,
+            #                                   encoder_output_with_entity)
             # output will be of size: (batch_size, seq_len_decoder, n_embd)
             # no need to remove the entity info because it was in the encoder. (only used as a key and not a query)
 
             # apply residual connection and normalization
-            x_norm = self.Cnorm1(decoder_input + attn_output)
+            # use pre LN
+            x_norm = self.Cnorm1(decoder_input)  
+            attn_output, _ = self.CrossAttention(x_norm, encoder_output_with_entity,
+                                                 encoder_output_with_entity)  
+            x = decoder_input + attn_output  
+
+            x_norm = self.Cnorm2(x)  
             feedforward_output = self.CrossFeedforward(x_norm)
-            x = self.Cnorm2(feedforward_output + attn_output)
+            x = x + feedforward_output 
+
 
             return x
 
