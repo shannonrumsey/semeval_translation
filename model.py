@@ -151,6 +151,7 @@ class TransformerDecoder(nn.Module):
             I think we should experiment with both approaches to see which yeilds
             better results
         """
+
         seq_len = decoder_input.size(1)
         if entity_info is not None:
             entity_len = entity_info.size(1)
@@ -159,6 +160,16 @@ class TransformerDecoder(nn.Module):
         decoder_input = decoder_input.long() 
         x = self.embedding(decoder_input)  # batch, seq len, embedding size
         
+
+        # If no padding mask provided, create from PAD tokens
+        if padding_mask is None:
+            if entity_info is not None:
+                padding_mask = (torch.cat((entity_info, decoder_input), dim=1) == semeval_train_dataset.vocab["<PAD>"]).bool()
+            else:
+                padding_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"]).bool()
+        else:
+            padding_mask = padding_mask.bool()  # d double dog checking that shi is boolean
+
 
         x = self.pos_embedding(x)
 
