@@ -42,6 +42,17 @@ class Decoder():
             Raises:
                 - an exception if it encounters one 
 
+            ** Usage **
+            ```
+            from output_module import Decoder
+
+            d = Decoder() #will grab default vocab
+            
+            token_ids = model(input_data) # [ [0, 1 , 3, ...], ...]
+            words = d.decode_outputs(token_ids) 
+            print(words) # -> [ some sentence here, another here, etc...]
+            ```
+
         """
         out = ['']*len(outputs) #fix size to avoid memory alloc for append
         try:
