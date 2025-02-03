@@ -17,6 +17,15 @@ class Decoder():
 
             If file is not found will set inverse_vocab to an empty dict
             if another unaccounted error happens initialization will raise an exception
+
+            ** Usage ** 
+            ```
+            from output_module import Decoder
+            d = Decoder() # default argument for vocab 
+
+            d = Decoder('../vocab/some_other_inverse_vocab.json') #file path is relative ./output_module  
+            
+            ```
         """
         self.inv_vocab_file = path(inverse_vocab)
 
