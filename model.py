@@ -186,6 +186,7 @@ class TransformerDecoder(nn.Module):
                 padding_mask = (decoder_input == semeval_train_dataset.vocab["<PAD>"]).bool()
         else:
             padding_mask = padding_mask.bool()  # d double dog checking that shi is boolean
+            padding_mask = ~padding_mask
 
         # embed the decoder input
         x = self.embedding(decoder_input)
