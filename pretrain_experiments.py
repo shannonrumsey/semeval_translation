@@ -116,7 +116,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 50
+    num_epoch = 30
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -176,11 +176,11 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1)
 
             # print("Encoder gradients")
-            # # print_gradient_stats(encoder)
+            # print_gradient_stats(encoder)
             # check_gradients(encoder)
 
             # print("Decoder gradients")
-            # # print_gradient_stats(decoder)
+            # print_gradient_stats(decoder)
             # check_gradients(decoder)
 
             epoch_loss += loss.item()
