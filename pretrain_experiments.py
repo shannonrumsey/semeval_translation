@@ -51,7 +51,7 @@ else:
 
 
 n_embd = 512
-n_head = 8
+n_head = 4
 n_layer = 4
 
 def check_gradients(model):
@@ -116,7 +116,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
     
-    num_epoch = 30
+    num_epoch = 20
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -148,21 +148,21 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             # print(string)
             # print("🥎")
             # print(" ")
-            decoder_input = decoder_input.to(device)
-            target = target.to(device)
-            mask = mask.to(device)
+            decoder_input = decoder_input.long().to(device)
+            target = target.long().to(device)
+            mask = mask.long().to(device)
             if entity_info is not None:
-                entity_info = entity_info.to(device)
+                entity_info = entity_info.long().to(device)
             else:
                 entity_info = None
 
             enc_optimizer.zero_grad()
             dec_optimizer.zero_grad()
 
-            hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(encoder_input, entity_info=None) # encoder inputs used to create pad mask for cross attention
+            hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(encoder_input, entity_info=entity_info) # encoder inputs used to create pad mask for cross attention
             #print("hidden_states : ", hidden_states)
             
-            decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=None, entity_info=None, use_encoders_entities=False, entities_in_self_attn=True) # NOTE: the encoder returns the embeddings it used for entities
+            decoder_outputs = decoder(decoder_input, hidden_states, encoder_inputs, encoder_entity_embeddings=encoder_entity_embeddings, entity_info=None, use_encoders_entities=True, entities_in_self_attn=False) # NOTE: the encoder returns the embeddings it used for entities
 
             #print("decoder_outputs: ", decoder_outputs)
             # The decoder CAN use these embeddings by taking it in as a parameter, but it doesnt have to. If the encoder entity embeddings are not provided,
@@ -175,18 +175,47 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             torch.nn.utils.clip_grad_norm_(encoder.parameters(), max_norm=1)
             torch.nn.utils.clip_grad_norm_(decoder.parameters(), max_norm=1)
 
-            # print("Encoder gradients")
-            # print_gradient_stats(encoder)
-            # check_gradients(encoder)
+            #print("Encoder gradients")
+            #print_gradient_stats(encoder)
+            #check_gradients(encoder)
 
-            # print("Decoder gradients")
-            # print_gradient_stats(decoder)
-            # check_gradients(decoder)
+            #print("Decoder gradients")
+            #print_gradient_stats(decoder)
+            #check_gradients(decoder)
 
             epoch_loss += loss.item()
 
             enc_optimizer.step()
             dec_optimizer.step()
+
+            pred_tokens = torch.argmax(decoder_outputs, dim=-1).tolist()
+            target_tokens = target.tolist()
+            encoder_tokens = encoder_input.tolist()
+            import random
+            random_int = random.randint(1, 100)
+            if random_int < 5:
+                print("\n\n🪸💐🪸💐 predictions on train 🪸💐🪸💐")
+                for i in range(min(2, len(pred_tokens))):  
+                    pred_sentence = " ".join([
+                        pretrain_dataset.inverse_vocab[token]
+                        for token in pred_tokens[i] if token in pretrain_dataset.inverse_vocab
+                    ])
+
+                    target_sentence = " ".join([
+                        pretrain_dataset.inverse_vocab[token]
+                        for token in target_tokens[i] if token in pretrain_dataset.inverse_vocab
+                    ])
+                    
+                    encoder_sentence = " ".join([
+                        pretrain_dataset.inverse_vocab[token]
+                        for token in encoder_tokens[i] if token in pretrain_dataset.inverse_vocab
+                    ])
+
+                    print(f"predicted {i+1}: {pred_sentence}")
+                    print(f"target {i+1}: {target_sentence}\n")
+                    print(f"input {i+1}: {encoder_sentence}\n")
+
+            
 
         avg_pretrain_loss = epoch_loss / len(train_loader)
         print(f"Epoch Training Loss: {avg_pretrain_loss}")
@@ -203,14 +232,14 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 elif len(batch) == 5: # we have entity info
                     encoder_input, decoder_input, target, mask, entity_info = batch
 
-                encoder_input = encoder_input.to(device)
+                encoder_input = encoder_input.long().to(device)
                 
-                decoder_input = decoder_input.to(device)
-                target = target.to(device)
-                mask = mask.to(device)
+                decoder_input = decoder_input.long().to(device)
+                target = target.long().to(device)
+                mask = mask.long().to(device)
 
                 if entity_info is not None:
-                    entity_info = entity_info.to(device)
+                    entity_info = entity_info.long().to(device)
                 else:
                     entity_info = None
 
@@ -222,7 +251,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                 val_loss += loss.item()
 
             total_val_loss = val_loss/ len(val_loader)
-            print(f"\n\n🥭🍏🍋🍎🍒🍆🥬🫐 Pretrain Validation Loss on Epoch {epoch}: {total_val_loss}")
+            print(f"\n\n🥭🍏🍋🍎🍒🍆🥬🫐 Validation Loss on Epoch {epoch}: {total_val_loss}")
             
             # Save model with lowest loss
             if prev_loss is None or total_val_loss < prev_loss:
@@ -292,13 +321,14 @@ train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/tra
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model")
 
 # Pretrain model
+print("pretrain")
 run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
         val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
         pretrain_decoder_path=pretrain_decoder_path, train=False)
 
 # Train model
-'''run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader,
+print("training")
+run_model(n_embd, n_head, n_layer, train_loader=semeval_train_loader,
           val_loader=semeval_val_loader, pretrain_encoder_path=pretrain_encoder_path,
           pretrain_decoder_path=pretrain_decoder_path, train_encoder_path=train_encoder_path,
           train_decoder_path=train_decoder_path, train=True)
-'''
