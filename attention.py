@@ -166,25 +166,41 @@ class CrossAttentionBlock(nn.Module):
         self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
                                               nn.Linear(4 * n_embd, n_embd))
     
-    def forward(self, decoder_input, encoder_output, pad_mask, entity_embeddings=None):
-            # concatenate entity_info to the encoder inputs if provided
+    def forward(self, decoder_input, encoder_output, pad_mask=None, entity_embeddings=None):
+        # First concatenate entity embeddings with encoder output
+        if entity_embeddings is not None:
+            encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
+        else:
+            encoder_output_with_entity = encoder_output
+
+        # Create or adjust padding mask to match encoder_output_with_entity length
+        if pad_mask is not None:
+            pad_mask = pad_mask.bool()  # i like da boolean masks bro
             if entity_embeddings is not None:
-                encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
-            else:
-                encoder_output_with_entity = encoder_output
+              
+                # Create new padding mask matching the concatenated length
+                entity_mask = torch.ones((pad_mask.shape[0], entity_embeddings.shape[1]), 
+                                       dtype=torch.bool, device=pad_mask.device)
+                pad_mask = torch.cat((entity_mask, pad_mask), dim=1)
+            
+            # debugging assertion: erify mask shape matches the sequence length
+            assert pad_mask.shape[1] == encoder_output_with_entity.shape[1], \
+                f"Padding mask length {pad_mask.shape[1]} doesn't match sequence length {encoder_output_with_entity.shape[1]}"
 
-            # get cross-attention 
-            # (decoder query, encoder key & value)
-            attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,
-                                                 encoder_output_with_entity)
-            # output will be of size: (batch_size, seq_len_decoder, n_embd)
-            # no need to remove the entity info because it was in the encoder. (only used as a key and not a query)
+        # get cross-attention with key padding mask
+        attn_output, _ = self.CrossAttention(
+            decoder_input, 
+            encoder_output_with_entity,
+            encoder_output_with_entity,
+            key_padding_mask=None if pad_mask is None else ~pad_mask.bool()
+        )
 
-            # apply residual connection and normalization
-            norm = self.Cnorm1(decoder_input + attn_output)
-            feedforward_output = self.CrossFeedforward(norm)
-            x = decoder_input + feedforward_output
+        # apply residual connection and normalization
+        x = self.Cnorm1(decoder_input + attn_output)
+        feedforward_output = self.CrossFeedforward(x)
+        x = self.Cnorm2(x + feedforward_output)
 
-            return x
+        return x
+
 
 
