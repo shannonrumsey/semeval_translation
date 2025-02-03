@@ -78,7 +78,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
-    dec_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
+    dec_optimizer = optim.AdamW(decoder.parameters(), lr=0.001)
     
     if train:
         encoder_path = train_encoder_path

@@ -75,7 +75,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
     enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
-    dec_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
+    dec_optimizer = optim.AdamW(decoder.parameters(), lr=0.001)
     
     if train:
         encoder_path = train_encoder_path
@@ -117,7 +117,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
 
             hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(encoder_input, 
                                                                  entity_info=entity_info,
-                                                                 padding_mask=mask)
+                                                                 padding_mask=None)
             
             # does not use encoder entity embeddings, but instead creates its own
             # entity embeddings for self attention
@@ -128,7 +128,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                     entity_info=None,
                                     use_encoders_entities=True,
                                     entities_in_self_attn=True,
-                                    padding_mask=mask)
+                                    padding_mask=None)
 
             loss = loss_fn(decoder_outputs.view(-1, vocab_size), target.view(-1))
 
@@ -168,12 +168,12 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
 
                 # Get model outputs
                 hidden_states, encoder_entity_embeddings, encoder_inputs = encoder(
-                    encoder_input, entity_info=entity_info, padding_mask=mask)
+                    encoder_input, entity_info=entity_info, padding_mask=None)
                 decoder_outputs = decoder(
                     decoder_input, hidden_states, encoder_inputs,
                     encoder_entity_embeddings=encoder_entity_embeddings, entity_info=None,
                     use_encoders_entities=True, entities_in_self_attn=True,
-                    padding_mask=mask)
+                    padding_mask=None)
 
                 # Get predictions
                 predictions = torch.argmax(decoder_outputs, dim=-1)
