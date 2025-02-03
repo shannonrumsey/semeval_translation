@@ -196,9 +196,9 @@ class CrossAttentionBlock(nn.Module):
         )
 
         # apply residual connection and normalization
-        x = self.Cnorm1(decoder_input + attn_output)
-        feedforward_output = self.CrossFeedforward(x)
-        x = self.Cnorm2(x + feedforward_output)
+        norm = self.Cnorm1(decoder_input + attn_output)
+        feedforward_output = self.CrossFeedforward(norm)
+        x = decoder_input + feedforward_output
 
         return x
 
