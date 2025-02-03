@@ -57,7 +57,7 @@ class EncoderLayers(nn.Module):
         Function gives option to include entity embeddings for experimentation
         """
         super().__init__()
-        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.1)
+        self.EncoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
 
         # for self attention in encoder
         self.Enorm1 = nn.LayerNorm(n_embd)
@@ -81,9 +81,9 @@ class EncoderLayers(nn.Module):
         if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,:]  # this will return our vector to (batch size, seq len, embedding dim)
 
-        norm = self.Enorm1(x + attn_output) # resid connection and
-        feedforward_output = self.EncoderFeedforward(norm)
-        x = x + feedforward_output
+        x = self.Enorm1(x + attn_output) # resid connection and
+        feedforward_output = self.EncoderFeedforward(x)
+        x = self.Enorm2(x + feedforward_output)
 
         return x
 
@@ -102,15 +102,13 @@ class DecoderLayers(nn.Module):
     """
     def __init__(self, n_embd, n_head):
         super().__init__()
-        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.1)
+        self.DecoderAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
 
         # for self attention in decoder
         self.Dnorm1 = nn.LayerNorm(n_embd)
-        self.Dnorm2 = nn.LayerNorm(n_embd)
+        
 
-        # feedforward layer with .3 dropout for regularization
-        self.DecoderFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
-                                                nn.Linear(4 * n_embd, n_embd))
+        
 
     # gets self attention for decoder. takes in optional entity info of dim (batch_size, entity_length, embedding_dim)
     # creates mask inside function
@@ -138,15 +136,16 @@ class DecoderLayers(nn.Module):
         # Attention mask
         mask = torch.triu(torch.ones(x.shape[1] + len_entity, x.shape[1] + len_entity, device=device), diagonal= len_entity +1).bool()
 
-        attn_output, _ = self.DecoderAttention(x_with_entity, x_with_entity, x_with_entity, attn_mask=mask)
+        
 
         if entity_embeddings is not None:  # REMOVE extra entity info once its been used in attention
             attn_output = attn_output[:, :-len_entity,
                           :]  # this will return our vector to (batch size, seq len, embedding dim)
-
-        norm = self.Dnorm1(x + attn_output)  # resid connection and layer norm
-        feedforward_output = self.DecoderFeedforward(norm)
-        x = x + feedforward_output
+        # using PRE LN
+        x_norm = self.Dnorm1(x_with_entity)  
+        attn_output, _ = self.DecoderAttention(x_norm, x_norm, x_norm, attn_mask=mask)
+        x = x + attn_output  # Residual connection
+        
 
         return x
 
@@ -156,7 +155,7 @@ class CrossAttentionBlock(nn.Module):
     def __init__(self, n_embd, n_head):
         super().__init__()
 
-        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True, dropout=0.1)
+        self.CrossAttention = nn.MultiheadAttention(n_embd, n_head, batch_first=True)
 
         # for cross attention
         self.Cnorm1 = nn.LayerNorm(n_embd)
@@ -166,41 +165,41 @@ class CrossAttentionBlock(nn.Module):
         self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
                                               nn.Linear(4 * n_embd, n_embd))
     
-    def forward(self, decoder_input, encoder_output, pad_mask=None, entity_embeddings=None):
-        # First concatenate entity embeddings with encoder output
-        if entity_embeddings is not None:
-            encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
-        else:
-            encoder_output_with_entity = encoder_output
-
-        # Create or adjust padding mask to match encoder_output_with_entity length
-        if pad_mask is not None:
-            pad_mask = pad_mask.bool()  # i like da boolean masks bro
+    def forward(self, decoder_input, encoder_output, pad_mask, entity_embeddings=None):
+            # concatenate entity_info to the encoder inputs if provided
             if entity_embeddings is not None:
+
+                encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
+            else:
+                encoder_output_with_entity = encoder_output
+
               
-                # Create new padding mask matching the concatenated length
-                entity_mask = torch.ones((pad_mask.shape[0], entity_embeddings.shape[1]), 
+            # Create new padding mask matching the concatenated length
+            entity_mask = torch.ones((pad_mask.shape[0], entity_embeddings.shape[1]), 
                                        dtype=torch.bool, device=pad_mask.device)
-                pad_mask = torch.cat((entity_mask, pad_mask), dim=1)
+            pad_mask = torch.cat((entity_mask, pad_mask), dim=1)
             
             # debugging assertion: erify mask shape matches the sequence length
             assert pad_mask.shape[1] == encoder_output_with_entity.shape[1], \
                 f"Padding mask length {pad_mask.shape[1]} doesn't match sequence length {encoder_output_with_entity.shape[1]}"
+            # apply pre layer norm
+            x_norm = self.Cnorm1(decoder_input)
+            # get cross-attention with key padding mask
+            attn_output, _ = self.CrossAttention(
+                x_norm, 
+                encoder_output_with_entity,
+                encoder_output_with_entity,
+                key_padding_mask=None if pad_mask is None else ~pad_mask.bool()
+            )
 
-        # get cross-attention with key padding mask
-        attn_output, _ = self.CrossAttention(
-            decoder_input, 
-            encoder_output_with_entity,
-            encoder_output_with_entity,
-            key_padding_mask=None if pad_mask is None else ~pad_mask.bool()
-        )
+            # apply PRE layer norm again before feedforward
+            x = decoder_input + attn_output  
 
-        # apply residual connection and normalization
-        norm = self.Cnorm1(decoder_input + attn_output)
-        feedforward_output = self.CrossFeedforward(norm)
-        x = decoder_input + feedforward_output
+            x_norm = self.Cnorm2(x)  
+            feedforward_output = self.CrossFeedforward(x_norm)
+            x = x + feedforward_output 
 
-        return x
+
 
 
 
