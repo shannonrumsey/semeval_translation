@@ -4,7 +4,7 @@ import os
 import pandas
 
 from model_outputs import Decoder
-from evaluation_output import infer_test
+from evaluation_output import infer_test, load_ent_test_info, load_test_dataframe, format_frame_for_sub
 
 class DecoderTests(unittest.TestCase):
 
@@ -19,15 +19,35 @@ class DecoderTests(unittest.TestCase):
 
 class InferenceTests(unittest.TestCase):
 
-    def test_inference_func(self):
-        # Test to ensure a) file is made, b) output is an instance of a df, and c) df contains proper columns required in output
-        mock_model = lambda x: x
-        infered_frame, out_path = infer_test(mock_model, lang='ar', file_prefix='test')
+    def test_load_frame(self):
+        # test that we load in the right dataframe with columns 
+        # id, source
+        df = load_test_dataframe('ar')
+        req_cols = set(['id', 'wikidata_id', 'entity_types', 'source', 'targets', 'source_locale', 'target_locale'])
 
-        self.assertTrue(os.path.exists(out_path), 'test file not created')
-        self.assertIsInstance(infered_frame, pandas.DataFrame, 'Output was not a dataframe')
-        self.assertListEqual(['id', 'source_language', 'target_language', 'text', 'prediction'], list(infered_frame.columns), 'Incorrect columns created')
+        self.assertSetEqual(req_cols, set(df.columns), 'Required columns not present in dataframe')
 
+    def test_load_ent(self):
+        ent_df = load_ent_test_info('ar')
+        req_cols = set(['source', 'target'])
+
+        self.assertSetEqual(req_cols, set(ent_df.columns), 'Required columns not present in dataframe')        
+
+    def test_format_out_frame(self):
+        df = load_test_dataframe('ar')
+        df['prediction'] = df['source']
+
+        formated = format_frame_for_sub(lang='ar', frame=df)
+        req_cols = set(['id', 'source_language', 'target_language', 'text', 'prediction'])
+
+        self.assertSetEqual(req_cols, set(formated.columns), 'Required columns not present in dataframe')
+
+    def test_infer(self):
+        df = load_test_dataframe('ar')
+        test_frame = infer_test(frame=df, src_column='source', batch_size=16)
+
+        self.assertIn('prediction', test_frame.columns, 'Predictions not present in output frame')
+        
 
 if __name__ == '__main__':
     unittest.main()

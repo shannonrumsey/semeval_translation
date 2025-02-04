@@ -4,3 +4,7 @@ MODEL_CONFIG = {
     'n_head': 8,
     'n_layer': 4,
 }
+
+HF_MBART_CONFIG = {
+    'batch_size': 16
+}
