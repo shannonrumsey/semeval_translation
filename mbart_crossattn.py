@@ -21,6 +21,10 @@ import pandas as pd
 from torch.utils.data import Dataset
 import torch
 import json
+from config import seed
+
+torch.manual_seed(seed)
+np.random.seed(seed)
 
 data_files = {
     'train': 'smashing/smashed_train.csv',
