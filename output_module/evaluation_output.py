@@ -1,58 +1,117 @@
 import os
 import pandas as pd
 import sys
+from tqdm import tqdm
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from config import semeval_langs
+from config import semeval_langs, HF_MBART_CONFIG
 
+rel_path = lambda x: os.path.join(os.path.dirname(__file__), x) #i abuse this lambda call so  much i should just make it a function 
 
-def infer_test(model = lambda x: x, lang:str = None, file_prefix:str = 'generic'):
+def load_test_dataframe(lang='ar'):
     """
-        Infer on the testing data by passing in a model (or some function)
-        that can take in the input s.t model(input) -> translation 
+    Load a test file in based on the language
+    """
+    file_name = f'../data/semeval_test/{semeval_langs[lang]}.jsonl'
+    file_path = rel_path(file_name)
+    json_df = pd.read_json(file_path, lines=True)
+
+    return json_df
+
+def load_ent_test_info(lang:str):
+    """
+    Load ner predictions for test info based on a language
+    """
+    p = os.path.join(os.path.dirname(__file__), f'../data/entity_info/test/{lang}.csv')
+    df = pd.read_csv(p)
+
+    return df
+
+
+def infer_test(
+        model=lambda x: x,
+        frame: pd.DataFrame = pd.DataFrame(), 
+        src_column: str = 'infer',
+        batch_size: int = HF_MBART_CONFIG['batch_size'],
+    ):
+    """
+    Infer on the testing data using a batch-processing model.
+
+    Args:
+        - model : function or model, anything that can take a batch input i.e `model(list_of_inputs)`
+        - frame <pd.Dataframe> : Dataframe to pull information from, model is evaulated on column src_column
+        - src_column <str> : the column to look for our inference data in DEFAULT = `infer`
+        - batch_size <int> : number of inputs to process per batch (default: 16).
+
+    Returns:
+        - (pandas.DataFrame, str): Dataframe with predictions for each row in column `prediction`
+
+    Usage:
+        ```
+        frame = infer_test(model, data_frame, src_column='test', file_prefix='my_model')
+
+        ```
+    """
+    tqdm.pandas()
+    try:
+        predictions = []
+        # Process in batches
+        for i in tqdm(range(0, len(frame), batch_size), desc=f"Processing test file"):
+            batch = frame[src_column][i:i + batch_size].tolist()
+            batch_predictions = model(batch)  # Apply model to batch
+            predictions.extend(batch_predictions)
+
+        # Add predictions to DataFrame
+        frame['prediction'] = predictions
+
+        return frame
+    except Exception as e:
+        raise e
+
+
+def format_frame_for_sub(
+        lang:str,
+        frame:pd.DataFrame, 
+        column_conversions:dict = 
+            {
+            'source': 'text'
+            }
+    ):
+    """ take in a dataframe, and language (optional column conversion dict) and produce a dataframe that can be exported for our task submissions
 
         Args:
-            - model : function or model, anything that can take an input i.e `model(inputs)`
-            - lang<str> : the language we are translating i.e ['ar', 'de', 'ko', etc..]
-            - file_prefix<str> : the prefix you would like to prepend to the file name
+            - lang<str> : the language code we want to use 
+            - frame<pd.Dataframe>: pandas dataframe containing at least an `id` column
+            - column_conversions<dict> : a dictionary for converting the frames columns into the ones needed for semeval
+
+                **IMPORTANT**: make sure that you have conversions from your columns into the following columns:
+                    `prediction` (your predicted result) [if not already present in your df]
+
+                    `text` (the source information) [if not already present in your df]
+
         Returns: 
-            A tuple s.t,
-                (pandas.DataFrame, string)
-                containing the output frame and the output file path (absolute path)
+            A dataframe with the following columns `['id', 'source_language', 'target_language', 'text', 'prediction']`
 
         Usage:
         ```
-        from output_module import infer_test
+            from output_module import format_frame_for_sub
 
-        # .. some model code 
-        # given the var model can take in an input like model(input) -> output
+            # some code that placed predictions into a column 'test' into a df called DF
 
-        frame, out_file = infer_test(model, lang='ar', file_prefix='my_model')
+            out_frame = format_frame_for_sub('de', DF, column_conversion={'test': 'prediction', 'source': 'text'})
 
-        #frame will contain columns [id, source_language, target_language, text, prediction] which are used for eval 
-        #out_file is the absolute path of the file generated
-        
-        #running on all languages
-        for lang in ['ar', 'es', 'de', 'fr', 'it', 'ja', 'ko', 'th', 'tr', 'zh']:
-            lang_frame, lang_file = infer_test(model, lang=lang, file_prefix='final')
+            out_frame.to_json(some_path.jsonl, orient='records', lines=True) #the last two args are important for making sure the json is the right format
+        ```
     """
-    file_name = semeval_langs[lang]
-    #load test file 
-    f_path = os.path.join(os.path.dirname(__file__), f'../data/semeval_test/{file_name}.jsonl')
-    out_dir = os.path.join(os.path.dirname(__file__), '../outputs/')
-    try:
-        json_df = pd.read_json(f_path, lines=True)
-        json_df['prediction'] = json_df['source'].apply(model) #apply model to text
-        json_df['text'] = json_df['source']
-        json_df['source_language'] = ['en'] * len(json_df['source'])
-        json_df['target_language'] = [lang] * len(json_df['source'])
 
-        os.makedirs(out_dir, exist_ok=True)
-        desired_columns = ['id', 'source_language', 'target_language', 'text', 'prediction']
-        out_path = f'{out_dir}/{file_prefix}_{lang}.jsonl'
-        json_df[desired_columns].to_json(out_path, orient='records', lines=True)
-        return json_df[desired_columns], out_path
-    except Exception as e:
-        raise e
+    frame['source_language'] = ['en']*len(frame)
+    frame['target_language'] = [lang]*len(frame)
+
+    for key, converted in column_conversions.items():
+        frame[converted] = frame[key]
+
     
+    desired_columns = ['id', 'source_language', 'target_language', 'text', 'prediction']
 
+    return frame[desired_columns]
