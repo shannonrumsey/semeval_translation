@@ -117,6 +117,9 @@ class TransformerEncoder(nn.Module):
                 padding_mask = padding_mask.bool()
 
         # Pass through attention layers
+        print(f'encoder padding mask: {padding_mask}')
+        print(f'encoder input shape: {x.shape}')
+        print(f'encoder padding mask shape: {padding_mask.shape}')
         for attention_layer in self.attention_layers:
             x = attention_layer(x, x, pad_mask=padding_mask, entity_embeddings=None)
 
@@ -201,6 +204,9 @@ class TransformerDecoder(nn.Module):
             entity_embeddings = None
 
         # Self-attention layers
+        print(f'decoder padding mask: {padding_mask}')
+        print(f'decoder input shape: {decoder_input.shape}')
+        print(f'decoder padding mask shape: {padding_mask.shape}')
         if entities_in_self_attn:
             for self_attn_block in self.self_attention_layers:
                 x = self_attn_block(x, padding_mask, entity_embeddings)
@@ -210,6 +216,10 @@ class TransformerDecoder(nn.Module):
 
         # Cross-attention layers
         encoder_padding_mask = (encoder_inputs == semeval_train_dataset.vocab["<PAD>"]).bool()
+        print(f'cross attention padding mask: {encoder_padding_mask}')
+        print(f'encoder input shape: {encoder_inputs.shape}')
+        print(f'encoder output shape: {encoder_output.shape}')
+        print(f'cross attention padding mask shape: {encoder_padding_mask.shape}')
         for cross_attn_block in self.cross_attention_layers:
             x = cross_attn_block(x, encoder_output, encoder_padding_mask, entity_embeddings)
 
