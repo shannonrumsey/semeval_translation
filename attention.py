@@ -6,13 +6,15 @@ from dataset import semeval_train_dataset
 seed = 27
 torch.manual_seed(seed)
 
+
+device = torch.device("cpu")
 # Determine if GPU available
-if torch.cuda.is_available():
+'''if torch.cuda.is_available():
     device = torch.device("cuda")
 elif torch.backends.mps.is_available():
     device = torch.device("mps")
 else:
-    device = torch.device("cpu")
+    device = torch.device("cpu")'''
 
 
 '''
@@ -106,7 +108,7 @@ class DecoderLayers(nn.Module):
 
         # for self attention in decoder
         self.Dnorm1 = nn.LayerNorm(n_embd)
-        
+        self.dropout = nn.Dropout(p=.4)
 
         
 
@@ -144,6 +146,7 @@ class DecoderLayers(nn.Module):
         # using PRE LN
         x_norm = self.Dnorm1(x_with_entity)  
         attn_output, _ = self.DecoderAttention(x_norm, x_norm, x_norm, attn_mask=mask)
+        attn_output = self.dropout(attn_output)
         x = x + attn_output  # Residual connection
         
 
@@ -164,40 +167,38 @@ class CrossAttentionBlock(nn.Module):
         # feedforward layer with .3 dropout for regularization
         self.CrossFeedforward = nn.Sequential(nn.Linear(n_embd, 4 * n_embd), nn.ReLU(),
                                               nn.Linear(4 * n_embd, n_embd))
+
+        self.dropout = nn.Dropout(p=.4)
     
     def forward(self, decoder_input, encoder_output, pad_mask, entity_embeddings=None):
             # concatenate entity_info to the encoder inputs if provided
             if entity_embeddings is not None:
-
                 encoder_output_with_entity = torch.cat((entity_embeddings, encoder_output), dim=1)
             else:
                 encoder_output_with_entity = encoder_output
 
-              
-            # Create new padding mask matching the concatenated length
-            entity_mask = torch.ones((pad_mask.shape[0], entity_embeddings.shape[1]), 
-                                       dtype=torch.bool, device=pad_mask.device)
-            pad_mask = torch.cat((entity_mask, pad_mask), dim=1)
-            
-            # debugging assertion: erify mask shape matches the sequence length
-            assert pad_mask.shape[1] == encoder_output_with_entity.shape[1], \
-                f"Padding mask length {pad_mask.shape[1]} doesn't match sequence length {encoder_output_with_entity.shape[1]}"
-            # apply pre layer norm
-            x_norm = self.Cnorm1(decoder_input)
-            # get cross-attention with key padding mask
-            attn_output, _ = self.CrossAttention(
-                x_norm, 
-                encoder_output_with_entity,
-                encoder_output_with_entity,
-                key_padding_mask=None if pad_mask is None else ~pad_mask.bool()
-            )
+            # get cross-attention 
+            # (decoder query, encoder key & value)
+            #attn_output, _ = self.CrossAttention(decoder_input, encoder_output_with_entity,
+            #                                   encoder_output_with_entity)
+            # output will be of size: (batch_size, seq_len_decoder, n_embd)
+            # no need to remove the entity info because it was in the encoder. (only used as a key and not a query)
 
-            # apply PRE layer norm again before feedforward
+            # apply residual connection and normalization
+            # use pre LN
+            x_norm = self.Cnorm1(decoder_input)  
+            attn_output, _ = self.CrossAttention(x_norm, encoder_output_with_entity,
+                                                 encoder_output_with_entity)  
+            attn_output = self.dropout(attn_output)
             x = decoder_input + attn_output  
 
             x_norm = self.Cnorm2(x)  
             feedforward_output = self.CrossFeedforward(x_norm)
+            feedforward_output = self.dropout(feedforward_output)
             x = x + feedforward_output 
+
+
+            return x
 
 
 

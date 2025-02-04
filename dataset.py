@@ -183,21 +183,6 @@ class TranslationDataset(Dataset):
 
         self.inverse_vocab = {index: token for token, index in self.vocab.items()}
 
-        #self.save_vocabs_to_file('first') #uncomment to save vocabs to files in ./vocab
-
-    def save_vocabs_to_file(self, prefix:str):
-        vocab_dir = path('./vocab')
-        try:
-            with open(f'{vocab_dir}/{prefix}_vocab.json', 'w') as f:
-                f.write(json.dumps(self.vocab, indent=3))
-            with open(f'{vocab_dir}/{prefix}_inv_vocab.json', 'w') as f:
-                f.write(json.dumps(self.inverse_vocab, indent=3))
-        
-            return True
-        except:
-            return False
-
-
     def load_vocab(self, vocab):  # this method will be used for val amd test sets to ensure they have the same vocab
         self.vocab = vocab
         self.inverse_vocab = {index: token for token, index in self.vocab.items()}

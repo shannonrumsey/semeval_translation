@@ -3,13 +3,28 @@ import os
 import torch
 from torch import nn
 from torch import optim
-from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder, device
+from model import PositionalEmbedding, TransformerEncoder, TransformerDecoder
 import sys
+from comet import download_model, load_from_checkpoint
+
+
 
 """
 entity_info should be batches of entities, corresponding to the input data
 """
+device = torch.device("cpu")
 
+
+comet_model_path = download_model("Unbabel/wmt22-comet-da")
+comet_model = load_from_checkpoint(comet_model_path)
+
+comet_model.to(device)
+comet_model.eval()
+
+def get_comet_score(pred_sentence, target_sentence):
+
+    score = comet_model.predict([target_sentence], [pred_sentence], batch_size=32)
+    return score[0]
 # Note: entities_in_self_attn is a flag ONLY for our fourth experiment. It just adds an if-else statement in the decoder to not use entities during self attention
 vocab_size = len(pretrain_dataset.vocab)
 # in order to set the proper size for max seq length for our positional embeddings
@@ -78,6 +93,17 @@ def check_gradients(model):
     if min_norm < 1e-6:
         print("⚠️ Warning: Possible vanishing gradients detected (Min norm < 1e-6)!")
 
+def get_optimizer(model, lr=1e-4, weight_decay=2e-2):
+    no_decay = ["bias", "LayerNorm.weight"] 
+    optimizer_grouped_parameters = [
+        {"params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+         "weight_decay": weight_decay},  
+        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+         "weight_decay": 0.0}  
+    ]
+    return AdamW(optimizer_grouped_parameters, lr=lr)
+
+
 
 def print_gradient_stats(model):
     for name, param in model.named_parameters():
@@ -85,7 +111,37 @@ def print_gradient_stats(model):
             grad_norm = param.grad.norm().item()
             print(f"{name} | Gradient Norm: {grad_norm:.6f}")
 
+def get_optimizer(model, lr=1e-4, weight_decay=1e-2):
+    """
+    We are using this function to avoid putting weight decay on layer norms
+    """
+    no_decay = ["bias", "LayerNorm.weight"]  # exclude layer norm and bias from weight decay
+    optimizer_grouped_parameters = [
+        {"params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+         "weight_decay": weight_decay},   # add weight deca to all other params
+        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)],
+         "weight_decay": 0.0}  
+    ]
+    return optim.AdamW(optimizer_grouped_parameters, lr=lr)
+
+def decode_tokens(tokens, vocab):
+            
+            sentence = ""
+            for token in tokens:
+                if token in vocab:
+                    word = vocab[token]
+                    if word == "</s>":
+                        break  
+
+                    if word.startswith("▁"): 
+                        sentence += " " + word[1:]  
+                    else:
+                        sentence += word 
+
+            return sentence.strip()
+
 def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encoder_path, pretrain_decoder_path, train_encoder_path=None, train_decoder_path=None, train=False):
+    best_comet_score = float('-inf')
     pos = PositionalEmbedding(n_embd)
     encoder = TransformerEncoder(vocab_size=vocab_size,
                                 n_embd=n_embd,
@@ -100,8 +156,10 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
                                 max_entity_len=entity_len).to(device)
     pad_index = pretrain_dataset.vocab["<PAD>"]
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_index)
-    enc_optimizer = optim.AdamW(encoder.parameters(), lr=0.001)
-    dec_optimizer = optim.AdamW(decoder.parameters(), lr=0.001)
+
+
+    enc_optimizer = get_optimizer(encoder, lr=0.0001)
+    dec_optimizer = get_optimizer(decoder, lr=0.0001)
 
     if train:
         encoder_path = train_encoder_path
@@ -115,8 +173,10 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
     else: 
         encoder_path = pretrain_encoder_path
         decoder_path = pretrain_decoder_path
-    
-    num_epoch = 20
+    if train:
+        num_epoch = 15
+    else:
+        num_epoch = 3
     prev_loss = None
     for epoch in range(num_epoch):
         epoch_loss = 0
@@ -193,7 +253,7 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             encoder_tokens = encoder_input.tolist()
             import random
             random_int = random.randint(1, 100)
-            if random_int < 5:
+            if random_int <= 2:
                 print("\n\n🪸💐🪸💐 predictions on train 🪸💐🪸💐")
                 for i in range(min(2, len(pred_tokens))):  
                     pred_sentence = " ".join([
@@ -254,11 +314,12 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
             print(f"\n\n🥭🍏🍋🍎🍒🍆🥬🫐 Validation Loss on Epoch {epoch}: {total_val_loss}")
             
             # Save model with lowest loss
-            if prev_loss is None or total_val_loss < prev_loss:
-                print("LOWEST LOSS: SAVING MODEL")
-                torch.save(encoder.state_dict(), encoder_path)
-                torch.save(decoder.state_dict(), decoder_path)
-                prev_loss = total_val_loss
+            if not train:
+                if prev_loss is None or total_val_loss < prev_loss:
+                    print("LOWEST LOSS: SAVING MODEL")
+                    torch.save(encoder.state_dict(), encoder_path)
+                    torch.save(decoder.state_dict(), decoder_path)
+                    prev_loss = total_val_loss
 
         target_tokens = target.tolist()
         encoder_tokens = encoder_input.tolist()
@@ -276,25 +337,41 @@ def run_model(n_embd, n_head, n_layer, train_loader, val_loader, pretrain_encode
         second_max_indices = top_indices[:, :, 1]
         second_pred_tokens = second_max_indices.tolist()
 
+        
+        if train:
+            target_sentences = [decode_tokens(tokens, pretrain_dataset.inverse_vocab) for tokens in target_tokens]
+            pred_sentences = [decode_tokens(tokens, pretrain_dataset.inverse_vocab) for tokens in pred_tokens]
+
+
+            comet_scores = []
+
+            for pred_sentence, target_sentence in zip(pred_sentences, target_sentences):
+                score = get_comet_score(pred_sentence, target_sentence)
+                comet_scores.append(score)
+
 
         
+            total_score = sum(comet_scores) / len(comet_scores) if comet_scores else 0
+            print(f"Overall COMET Score: {total_score}")
+            if total_score > best_comet_score:
+                print("HIGHEST COMET: SAVING MODEL")
+                torch.save(encoder.state_dict(), encoder_path)
+                torch.save(decoder.state_dict(), decoder_path)
+                prev_loss = total_val_loss
+
+
 
         print("\n\n🍋🍋 with highest 🍋🍋")
-        for i in range(min(5, len(pred_tokens))):
-            pred_sentence = " ".join([
-                pretrain_dataset.inverse_vocab[token]
-                for token in pred_tokens[i] if token in pretrain_dataset.inverse_vocab
-            ])
 
-            target_sentence = " ".join([
-                pretrain_dataset.inverse_vocab[token]
-                for token in target_tokens[i] if token in pretrain_dataset.inverse_vocab
-            ])
-            encoder_sentence = " ".join([pretrain_dataset.inverse_vocab[token] for token in encoder_tokens[i] if token in pretrain_dataset.inverse_vocab])
+        for i in range(min(5, len(pred_tokens))):
+            pred_sentence = decode_tokens(pred_tokens[i], pretrain_dataset.inverse_vocab)
+            target_sentence = decode_tokens(target_tokens[i], pretrain_dataset.inverse_vocab)
+            encoder_sentence = decode_tokens(encoder_tokens[i], pretrain_dataset.inverse_vocab)
 
             print(f"predicted {i+1}: {pred_sentence}")
             print(f"target {i+1}: {target_sentence}\n")
             print(f"encoder {i+1}: {encoder_sentence}\n")
+        
         mask_token_idx = next(idx for idx, token in pretrain_dataset.inverse_vocab.items() if token == "[MASK]")
         masked_positions = [
             [i for i, token in enumerate(seq) if token == mask_token_idx]
@@ -321,10 +398,10 @@ train_encoder_path = os.path.join(os.path.dirname(__file__), "trained_models/tra
 train_decoder_path = os.path.join(os.path.dirname(__file__), "trained_models/train_decoder_model")
 
 # Pretrain model
-print("pretrain")
+'''print("pretrain")
 run_model(n_embd, n_head, n_layer, train_loader=pretrain_train_loader,
         val_loader=pretrain_val_loader, pretrain_encoder_path=pretrain_encoder_path,
-        pretrain_decoder_path=pretrain_decoder_path, train=False)
+        pretrain_decoder_path=pretrain_decoder_path, train=False)'''
 
 # Train model
 print("training")
