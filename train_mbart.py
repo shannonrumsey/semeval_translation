@@ -21,7 +21,10 @@ from torch.utils.data import Dataset
 import torch
 from transformers.modeling_outputs import Seq2SeqLMOutput
 import json
+from config import seed
 
+torch.manual_seed(seed)
+np.random.seed(seed)
 
 data_files = {
     'train': 'smashing/smashed_train.csv',
